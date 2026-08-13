@@ -3,6 +3,7 @@ import {
   Box, Typography, TextField, Switch, FormControlLabel,
   ToggleButton, ToggleButtonGroup, Divider, Button, Autocomplete,
   Tooltip, alpha, useTheme, Select, MenuItem, InputLabel, FormControl, IconButton,
+  Slider,
 } from '@mui/material'
 import { useTranslation } from 'react-i18next'
 import SensorsIcon from '@mui/icons-material/Sensors'
@@ -22,6 +23,7 @@ import type { PanelWidget, LayoutItem } from '@/types/panel'
 import type { HardwareSnapshot } from '@/types/sensors'
 import { SensorPickerDialog }   from '@/components/SensorPickerDialog'
 import { useSystemInfo } from '@/hooks/useSystemInfo'
+import { useFonts } from '@/hooks/useFonts'
 
 const PRESET_COLORS = [
   '#03dac6', '#7c6ef5', '#4caf50', '#ff9800',
@@ -84,6 +86,8 @@ const COMMON_FONTS = [
   'Georgia', 'Times New Roman', 'Courier New', 'Lucida Console',
   'Impact', 'Comic Sans MS', 'Segoe UI', 'Calibri', 'Consolas',
   'Roboto', 'Open Sans', 'Lato', 'Montserrat', 'Oswald',
+  // 中文字体（Windows 系统自带）
+  '微软雅黑', '宋体', '黑体', '楷体', '仿宋', '等线', '幼圆', '隶书',
 ]
 
 interface Props {
@@ -164,7 +168,7 @@ function AccentColorRow({ value, onChange, visible, onVisibleChange }: {
 }
 
 function TextStyleSection({
-  title, color, fontSize, bold, fontFamily, italic,
+  title, color, fontSize, bold, fontFamily, italic, fontOptions,
   visible, onVisibleChange,
   onColorChange, onFontSizeChange, onBoldChange, onFontFamilyChange, onItalicChange,
 }: {
@@ -174,6 +178,7 @@ function TextStyleSection({
   bold: boolean
   fontFamily: string
   italic: boolean
+  fontOptions: string[]
   visible?: boolean
   onVisibleChange?: (v: boolean) => void
   onColorChange: (c: string) => void
@@ -245,7 +250,7 @@ function TextStyleSection({
         <Autocomplete
           size="small"
           freeSolo
-          options={COMMON_FONTS}
+          options={fontOptions}
           value={fontFamily}
           onInputChange={(_, v) => onFontFamilyChange(v)}
           renderInput={params => (
@@ -296,6 +301,10 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
   // Shared system info cache — used to enumerate available disk drive letters
   // for the SystemInfo widget's per-disk visibility picker.
   const { info: sysInfo } = useSystemInfo()
+  // Fonts actually installed on the OS (falls back to COMMON_FONTS while loading
+  // or when running outside Electron).
+  const installedFonts = useFonts()
+  const fontOptions = installedFonts.length > 0 ? installedFonts : COMMON_FONTS
 
   function startRename() {
     setRenameValue(widget.widgetName ?? widget.type.replace(/([A-Z])/g, ' $1').trim())
@@ -644,6 +653,7 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
                 />
               )}
               <TextStyleSection
+                fontOptions={fontOptions}
                 title={t('widgetProperties.timeStyle')}
                 color={widget.color ?? '#ffffff'}
                 fontSize={widget.fontSize ?? 28}
@@ -688,6 +698,7 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
                 </Select>
               </FormControl>
               <TextStyleSection
+                fontOptions={fontOptions}
                 title={t('widgetProperties.dateStyle')}
                 color={widget.dateColor ?? 'rgba(255,255,255,0.45)'}
                 fontSize={widget.dateFontSize ?? 11}
@@ -776,7 +787,7 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
           <Autocomplete
             size="small"
             freeSolo
-            options={COMMON_FONTS}
+            options={fontOptions}
             value={widget.fontFamily ?? ''}
             onInputChange={(_, v) => onUpdate({ fontFamily: v || undefined })}
             renderInput={params => (
@@ -805,6 +816,7 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
           )}
           <Divider />
           <TextStyleSection
+            fontOptions={fontOptions}
             title={t('widgetProperties.label')}
             visible={widget.showLabel ?? true}
             onVisibleChange={v => onUpdate({ showLabel: v })}
@@ -821,6 +833,7 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
           />
           <Divider />
           <TextStyleSection
+            fontOptions={fontOptions}
             title={t('widgetProperties.value')}
             visible={widget.showValue ?? true}
             onVisibleChange={v => onUpdate({ showValue: v })}
@@ -839,6 +852,7 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
             <>
               <Divider />
               <TextStyleSection
+                fontOptions={fontOptions}
                 title={t('widgetProperties.unit')}
                 visible={widget.showUnit ?? true}
                 onVisibleChange={v => onUpdate({ showUnit: v })}
@@ -1061,6 +1075,10 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
             label={t('widgetProperties.sysShowOs')}       sx={{ m: 0 }}
           />
           <FormControlLabel
+            control={<Switch size="small" checked={widget.sysShowUptime   ?? true} onChange={e => onUpdate({ sysShowUptime:   e.target.checked })} />}
+            label={t('widgetProperties.sysShowUptime')}   sx={{ m: 0 }}
+          />
+          <FormControlLabel
             control={<Switch size="small" checked={widget.sysShowDisks    ?? true} onChange={e => onUpdate({ sysShowDisks:    e.target.checked })} />}
             label={t('widgetProperties.sysShowDisks')}    sx={{ m: 0 }}
           />
@@ -1141,6 +1159,7 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
 
           <Divider sx={{ my: 0.5 }} />
           <TextStyleSection
+            fontOptions={fontOptions}
             title={t('widgetProperties.label')}
             color={widget.labelColor ?? 'rgba(255,255,255,0.55)'}
             fontSize={widget.labelFontSize ?? 12}
@@ -1155,6 +1174,7 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
           />
           <Divider sx={{ my: 0.5 }} />
           <TextStyleSection
+            fontOptions={fontOptions}
             title={t('widgetProperties.value')}
             color={widget.color ?? '#fff'}
             fontSize={widget.fontSize ?? 14}
@@ -1166,6 +1186,23 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
             onBoldChange={b => onUpdate({ valueBold: b })}
             onFontFamilyChange={f => onUpdate({ valueFontFamily: f || undefined })}
             onItalicChange={i => onUpdate({ valueItalic: i })}
+          />
+        </Box>
+      )}
+
+      {/* ── SensorList widget — font size ───────────────────────── */}
+      {widget.type === 'SensorList' && (
+        <Box>
+          <SectionLabel>{t('widgetProperties.fontSize')}</SectionLabel>
+          <Slider
+            size="small"
+            min={8}
+            max={24}
+            value={widget.fontSize ?? 11}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+              onUpdate({ fontSize: Number(e.target.value) })
+            }
+            sx={{ width: '100%', accentColor: 'primary.main', cursor: 'pointer' }}
           />
         </Box>
       )}

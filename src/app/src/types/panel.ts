@@ -11,6 +11,7 @@ export type WidgetType =
   | 'Image'
   | 'Box'
   | 'SystemInfo'
+  | 'SensorList'
 
 export interface PanelWidget {
   id: string
@@ -91,6 +92,7 @@ export interface PanelWidget {
   sysShowRamSpeed?: boolean
   sysShowOs?: boolean
   sysShowDisks?: boolean
+  sysShowUptime?: boolean
   // SystemInfo widget — style customization
   sysShowLabels?: boolean       // show row titles (CPU/RAM/OS/…)
   sysShowIcons?: boolean        // show row icons
@@ -139,4 +141,5 @@ export const WIDGET_DEFAULTS: Record<WidgetType, { w: number; h: number }> = {
   Image:           { w: 200, h: 200 },
   Box:             { w: 337, h: 560 },
   SystemInfo:      { w: 260, h: 200 },
+  SensorList:      { w: 260, h: 320 },
 }

@@ -12,6 +12,7 @@ import { CustomWidget }          from './widgets/CustomWidget'
 import { ImageWidget }           from './widgets/ImageWidget'
 import { BoxWidget }             from './widgets/BoxWidget'
 import { SystemInfoWidget }      from './widgets/SystemInfoWidget'
+import { SensorListWidget }      from './widgets/SensorListWidget'
 
 interface Props {
   widget: PanelWidget
@@ -41,6 +42,8 @@ export const WidgetRenderer: React.FC<Props> = ({ widget, snapshot, history }) =
       return <BoxWidget widget={widget} />
     case 'SystemInfo':
       return <SystemInfoWidget widget={widget} />
+    case 'SensorList':
+      return <SensorListWidget widget={widget} snapshot={snapshot} />
     default:
       return null
   }

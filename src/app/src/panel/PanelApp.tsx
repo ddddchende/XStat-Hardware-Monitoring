@@ -125,9 +125,9 @@ export const PanelApp: React.FC = () => {
           history={history}
           isEditMode={false}
           snapToGrid={false}
-          selectedWidgetId={null}
+          selectedWidgetIds={[]}
           onSelect={() => {}}
-          onWidgetGeometry={() => {}}
+          onWidgetGeometries={() => {}}
         />
       </div>
     </div>

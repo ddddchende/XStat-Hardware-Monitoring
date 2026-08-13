@@ -14,7 +14,8 @@ public record SystemInfo(
     uint   RamSpeedMhz,      // memory clock speed (MT/s), 0 if unknown
     string RamType,          // "DDR4" / "DDR5" / ""
     IReadOnlyList<RamStick> RamSticks,
-    IReadOnlyList<DiskInfo>  Disks
+    IReadOnlyList<DiskInfo>  Disks,
+    long   UptimeSeconds     // OS uptime in seconds since last boot
 );
 
 public record RamStick(

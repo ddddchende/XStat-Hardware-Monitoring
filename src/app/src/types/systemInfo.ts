@@ -29,4 +29,5 @@ export interface SystemInfo {
   ramType: string
   ramSticks: RamStick[]
   disks: DiskInfo[]
+  uptimeSeconds?: number
 }

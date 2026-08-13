@@ -18,13 +18,14 @@ export const RAMPanel: React.FC<RAMPanelProps> = ({ sensors, history }) => {
   const ramSensors = sensors.filter(s => s.category === 'RAM')
   if (ramSensors.length === 0) return null
 
-  const memLoad  = findSensor(ramSensors, 'RAM', 'Load', 'Memory')
-  const memUsed  = findSensor(ramSensors, 'RAM', 'Data', 'Used Memory')
-      ?? findSensor(ramSensors, 'RAM', 'Data', 'Memory Used')
-  const memAvail = findSensor(ramSensors, 'RAM', 'Data', 'Available Memory')
-      ?? findSensor(ramSensors, 'RAM', 'Data', 'Memory Available')
-  const memTotal = findSensor(ramSensors, 'RAM', 'Data', 'Virtual Memory Committed')
-      ?? findSensor(ramSensors, 'RAM', 'Data', 'Memory')
+  // LHM can surface RAM usage twice: a commit-based entry (Used+Available ≈ commit
+  // limit, far larger than physical RAM) plus the physical entry. First-match lookup
+  // hits the commit-based one and shows a too-low usage, so pick the physical entry
+  // (the one with the smallest Used+Available total).
+  const mem = findPhysicalRAM(ramSensors)
+  const memLoad  = mem.load
+  const memUsed  = mem.used
+  const memAvail = mem.available
 
   const loadHistory = memLoad ? (history.get(memLoad.id) ?? []) : []
   const accent = '#9c8af5' // soft purple for RAM
@@ -56,4 +57,53 @@ export const RAMPanel: React.FC<RAMPanelProps> = ({ sensors, history }) => {
       </CardContent>
     </Card>
   )
+}
+
+/** Sensor id minus the trailing "/type/index" → identifies the owning hardware entry. */
+function hardwareKey(id: string): string {
+  const i = id.lastIndexOf('/')
+  const j = i > 0 ? id.lastIndexOf('/', i - 1) : -1
+  return j > 0 ? id.slice(0, j) : id
+}
+
+/**
+ * Picks the physical-RAM sensors. LHM can expose RAM usage twice: a commit-based
+ * entry whose Used+Available ≈ commit limit (far larger than physical RAM) plus the
+ * physical entry; first-match lookup can land on the bogus one. Physical RAM is the
+ * entry with the smallest Used+Available total. Falls back to first-match lookup
+ * when there aren't ≥2 entries to disambiguate.
+ */
+function findPhysicalRAM(ram: SensorReading[]) {
+  const usedCandidates = ram.filter(s =>
+    s.type === 'Data' && (s.name === 'Used Memory' || s.name === 'Memory Used') && s.value != null)
+
+  if (usedCandidates.length >= 2) {
+    let best: { used: SensorReading; available: SensorReading } | null = null
+    for (const used of usedCandidates) {
+      const available = ram.find(a =>
+        a.type === 'Data'
+        && (a.name === 'Available Memory' || a.name === 'Memory Available')
+        && a.value != null
+        && hardwareKey(a.id) === hardwareKey(used.id))
+      if (!available) continue
+      if (!best || used.value! + available.value! < best.used.value! + best.available.value!) {
+        best = { used, available }
+      }
+    }
+    if (best) {
+      const key = hardwareKey(best.used.id)
+      return {
+        load: ram.find(s => s.type === 'Load' && s.name === 'Memory' && hardwareKey(s.id) === key),
+        used: best.used,
+        available: best.available,
+      }
+    }
+  }
+
+  // Single entry (or entries can't be told apart) → first-match, as before.
+  return {
+    load: findSensor(ram, 'RAM', 'Load', 'Memory'),
+    used: findSensor(ram, 'RAM', 'Data', 'Used Memory') ?? findSensor(ram, 'RAM', 'Data', 'Memory Used'),
+    available: findSensor(ram, 'RAM', 'Data', 'Available Memory') ?? findSensor(ram, 'RAM', 'Data', 'Memory Available'),
+  }
 }

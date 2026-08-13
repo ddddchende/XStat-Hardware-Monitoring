@@ -150,6 +150,8 @@ function makeDefaultWidget(type: WidgetType): PanelWidget {
       return { ...base, boxFill: '#0D0D10', boxBorderColor: '#252933', boxBorderWidth: 1, boxRadius: 12 }
     case 'SystemInfo':
       return { ...base, sysShowCpu: true, sysShowGpu: true, sysShowRamTotal: true, sysShowRamSpeed: true, sysShowOs: true, sysShowDisks: true }
+    case 'SensorList':
+      return { ...base }
   }
 }
 
@@ -313,28 +315,75 @@ export function usePanelLayout() {
     }))
   }
 
+  // Remove several widgets in a single history commit (one undo step).
+  function removeWidgets(widgetIds: string[]) {
+    if (widgetIds.length === 0) return
+    const ids = new Set(widgetIds)
+    commit(s => ({
+      ...s,
+      panels: s.panels.map(p =>
+        p.id === activePanel.id
+          ? {
+              ...p,
+              widgets: p.widgets.filter(w => !ids.has(w.id)),
+              layout: p.layout.filter(l => !ids.has(l.i)),
+            }
+          : p
+      ),
+    }))
+  }
+
+  // Apply geometry updates to several widgets in a single history commit
+  // (one undo step for a whole group move/resize).
+  function updateWidgetGeometries(updates: Array<{ id: string; geom: Partial<Omit<LayoutItem, 'i'>> }>) {
+    if (updates.length === 0) return
+    const map = new Map(updates.map(u => [u.id, u.geom]))
+    commit(s => ({
+      ...s,
+      panels: s.panels.map(p =>
+        p.id === activePanel.id
+          ? { ...p, layout: p.layout.map(l => (map.has(l.i) ? { ...l, ...map.get(l.i) } : l)) }
+          : p
+      ),
+    }))
+  }
+
   // Clone a widget (new UUID) and offset its layout position by 20px.
   // Returns the new widget's id, or null if the source widget was not found.
   function duplicateWidget(widgetId: string): string | null {
-    const sourceWidget = activePanel.widgets.find(w => w.id === widgetId)
-    const sourceLayout = activePanel.layout.find(l => l.i === widgetId)
-    if (!sourceWidget || !sourceLayout) return null
+    const ids = duplicateWidgets([widgetId])
+    return ids[0] ?? null
+  }
 
-    const newId = crypto.randomUUID()
-    // Deep-clone widget props (customFiles / nested records shouldn't be shared by ref)
-    const clonedWidget: PanelWidget = {
-      ...sourceWidget,
-      id: newId,
-      ...(sourceWidget.customFiles
-        ? { customFiles: { ...sourceWidget.customFiles } }
-        : {}),
+  // Clone several widgets (new UUIDs, each offset by 20px) in a single history
+  // commit. Returns the new widgets' ids in the same order as the input.
+  function duplicateWidgets(widgetIds: string[]): string[] {
+    const created: { widget: PanelWidget; item: LayoutItem }[] = []
+    for (const wid of widgetIds) {
+      const sourceWidget = activePanel.widgets.find(w => w.id === wid)
+      const sourceLayout = activePanel.layout.find(l => l.i === wid)
+      if (!sourceWidget || !sourceLayout) continue
+
+      const newId = crypto.randomUUID()
+      // Deep-clone widget props (customFiles / nested records shouldn't be shared by ref)
+      const clonedWidget: PanelWidget = {
+        ...sourceWidget,
+        id: newId,
+        ...(sourceWidget.customFiles
+          ? { customFiles: { ...sourceWidget.customFiles } }
+          : {}),
+      }
+      created.push({
+        widget: clonedWidget,
+        item: {
+          ...sourceLayout,
+          i: newId,
+          x: sourceLayout.x + 20,
+          y: sourceLayout.y + 20,
+        },
+      })
     }
-    const clonedLayout: LayoutItem = {
-      ...sourceLayout,
-      i: newId,
-      x: sourceLayout.x + 20,
-      y: sourceLayout.y + 20,
-    }
+    if (created.length === 0) return []
 
     commit(s => ({
       ...s,
@@ -342,13 +391,13 @@ export function usePanelLayout() {
         p.id === activePanel.id
           ? {
               ...p,
-              widgets: [...p.widgets, clonedWidget],
-              layout: [...p.layout, clonedLayout],
+              widgets: [...p.widgets, ...created.map(c => c.widget)],
+              layout: [...p.layout, ...created.map(c => c.item)],
             }
           : p
       ),
     }))
-    return newId
+    return created.map(c => c.widget.id)
   }
 
   // Import a widget previously exported as .xstatwidget. Generates a fresh UUID and a
@@ -489,9 +538,12 @@ export function usePanelLayout() {
     addWidget,
     updateWidget,
     removeWidget,
+    removeWidgets,
     duplicateWidget,
+    duplicateWidgets,
     importWidget,
     updateWidgetGeometry,
+    updateWidgetGeometries,
     createPanel,
     deletePanel,
     renamePanel,

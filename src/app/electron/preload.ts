@@ -58,4 +58,8 @@ contextBridge.exposeInMainWorld('xstat', {
     readFile: (filePath: string): Promise<{ ok: boolean; content?: string }> =>
       ipcRenderer.invoke('workspace:readFile', filePath),
   },
+  fonts: {
+    /** All font families installed on the OS (localized names, incl. Chinese). */
+    list: (): Promise<string[]> => ipcRenderer.invoke('fonts:list'),
+  },
 })

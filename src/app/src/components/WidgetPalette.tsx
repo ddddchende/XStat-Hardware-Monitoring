@@ -12,6 +12,7 @@ import ImageIcon         from '@mui/icons-material/Image'
 import CropSquareIcon    from '@mui/icons-material/CropSquare'
 import InfoIcon          from '@mui/icons-material/Info'
 import CategoryIcon      from '@mui/icons-material/Category'
+import ListAltIcon       from '@mui/icons-material/ListAlt'
 import UploadFileIcon    from '@mui/icons-material/UploadFile'
 import type { WidgetType, PanelWidget } from '@/types/panel'
 import { ICON_CATEGORIES, ICONS, iconToDataUrl } from '@/data/iconLibrary'
@@ -37,6 +38,7 @@ const GROUPS: PaletteGroup[] = [
       { type: 'SensorBar',       labelKey: 'palette.bar',        icon: <LinearScaleIcon sx={{ fontSize: 18 }} />,  hintKey: 'palette.barHint' },
       { type: 'SensorSparkline', labelKey: 'palette.sparkline',  icon: <ShowChartIcon sx={{ fontSize: 18 }} />,    hintKey: 'palette.sparklineHint' },
       { type: 'SensorGauge',     labelKey: 'palette.gauge',      icon: <SpeedIcon sx={{ fontSize: 18 }} />,        hintKey: 'palette.gaugeHint' },
+      { type: 'SensorList',      labelKey: 'palette.sensorList', icon: <ListAltIcon sx={{ fontSize: 18 }} />,      hintKey: 'palette.sensorListHint' },
     ],
   },
   {

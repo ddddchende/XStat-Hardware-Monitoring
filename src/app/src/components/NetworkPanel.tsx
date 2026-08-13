@@ -1,6 +1,6 @@
 import React from 'react'
 import {
-  Box, Typography, Card, CardContent, Divider, useTheme, Chip
+  Box, Typography, Card, CardContent, Divider, useTheme, Chip, alpha
 } from '@mui/material'
 import { useTranslation } from 'react-i18next'
 import RouterIcon    from '@mui/icons-material/Router'
@@ -57,6 +57,13 @@ export const NetworkPanel: React.FC<NetworkPanelProps> = ({ sensors, history }) 
     interfaceMap.get(s.hardwareName)!.push(s)
   }
 
+  // The service synthesizes a combined "Network Total" entry (sum of all NICs'
+  // upload / download throughput) — pull it out so it renders on top, never as
+  // a regular adapter row.
+  const TOTAL_NAME = 'Network Total'
+  const totalSensors = interfaceMap.get(TOTAL_NAME) ?? []
+  interfaceMap.delete(TOTAL_NAME)
+
   // Sort: active first (any throughput > 0), then alphabetical
   const sorted = [...interfaceMap.entries()].sort(([, a], [, b]) => {
     const aActive = a.some(s => s.type === 'Throughput' && (s.value ?? 0) > 0)
@@ -68,6 +75,10 @@ export const NetworkPanel: React.FC<NetworkPanelProps> = ({ sensors, history }) 
   const dlColor = theme.palette.success.main
   const ulColor = theme.palette.info.main
 
+  // Aggregate throughput (sum of all adapters)
+  const totalDl = totalSensors.find(s => s.type === 'Throughput' && s.name.toLowerCase().includes('download'))
+  const totalUl = totalSensors.find(s => s.type === 'Throughput' && s.name.toLowerCase().includes('upload'))
+
   return (
     <Card>
       <CardContent sx={{ pb: '12px !important' }}>
@@ -75,6 +86,37 @@ export const NetworkPanel: React.FC<NetworkPanelProps> = ({ sensors, history }) 
           <Box sx={{ color: ulColor, display: 'flex' }}><RouterIcon /></Box>
           <Typography variant="h6" sx={{ fontWeight: 700 }}>{t('hardware.network')}</Typography>
         </Box>
+
+        {/* Aggregate upload/download across all adapters (synthesized by the service) */}
+        {totalSensors.length > 0 && (
+          <Box
+            sx={{
+              mb: 2, pb: 2,
+              borderBottom: `1px dashed ${alpha(theme.palette.divider, 0.7)}`,
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 1 }}>
+              <RouterIcon sx={{ fontSize: 16, color: theme.palette.primary.main }} />
+              <Typography variant="caption" sx={{ flex: 1, fontSize: '0.72rem', fontWeight: 700, color: 'text.primary' }}>
+                {t('hardware.networkTotal')}
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <ArrowDownwardIcon sx={{ fontSize: 14, color: dlColor }} />
+                <Typography variant="body2" sx={{ fontWeight: 700, color: dlColor, fontVariantNumeric: 'tabular-nums' }}>
+                  {fmtSpeed(totalDl?.value, totalDl?.unit ?? 'Mbps')}
+                </Typography>
+              </Box>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <ArrowUpwardIcon sx={{ fontSize: 14, color: ulColor }} />
+                <Typography variant="body2" sx={{ fontWeight: 700, color: ulColor, fontVariantNumeric: 'tabular-nums' }}>
+                  {fmtSpeed(totalUl?.value, totalUl?.unit ?? 'Mbps')}
+                </Typography>
+              </Box>
+            </Box>
+          </Box>
+        )}
 
         {sorted.map(([ifName, ifSensors], idx) => {
           const dl = ifSensors.find(s => s.type === 'Throughput' && s.name.toLowerCase().includes('download'))

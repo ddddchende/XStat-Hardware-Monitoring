@@ -4,6 +4,7 @@ import type { PanelLayout, LayoutItem } from '@/types/panel'
 import type { HardwareSnapshot } from '@/types/sensors'
 import type { HistoryPoint } from '@/hooks/useSensorHistory'
 import { WidgetRenderer } from './WidgetRenderer'
+import { ensurePanelFonts } from '@/fonts/loadPanelFonts'
 
 type Dir = 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w' | 'nw'
 
@@ -23,6 +24,8 @@ const HANDLES: DragHandle[] = [
   { dir: 'w',  style: { top: '50%',    transform: 'translateY(-50%)', left: -4,       cursor: 'w-resize'  } },
 ]
 
+interface GroupMember { id: string; x: number; y: number; w: number; h: number }
+
 interface ActiveOp {
   kind: 'move' | 'resize'
   id: string
@@ -30,7 +33,13 @@ interface ActiveOp {
   mx0: number; my0: number
   ox: number;  oy: number
   ow: number;  oh: number
+  // Multi-widget move: snapshot of every selected widget at drag start.
+  group?: GroupMember[]
+  // Final positions per widget id, filled in while dragging.
+  final?: Map<string, { x: number; y: number }>
 }
+
+interface GeomUpdate { id: string; geom: Partial<Omit<LayoutItem, 'i'>> }
 
 /**
  * Smart-guide snap: align a widget's edges (left/right/top/bottom) and centers
@@ -74,9 +83,9 @@ interface Props {
   history: Map<string, HistoryPoint[]>
   isEditMode: boolean
   snapToGrid?: boolean
-  selectedWidgetId: string | null
-  onSelect: (id: string | null) => void
-  onWidgetGeometry: (id: string, geom: Partial<Omit<LayoutItem, 'i'>>) => void
+  selectedWidgetIds: string[]
+  onSelect: (id: string | null, additive?: boolean) => void
+  onWidgetGeometries: (updates: GeomUpdate[]) => void
   onPanStart?: (e: React.MouseEvent) => void
   onCanvasSelect?: () => void
 }
@@ -87,9 +96,9 @@ export const PanelCanvas: React.FC<Props> = ({
   history,
   isEditMode,
   snapToGrid,
-  selectedWidgetId,
+  selectedWidgetIds,
   onSelect,
-  onWidgetGeometry,
+  onWidgetGeometries,
   onPanStart,
   onCanvasSelect,
 }) => {
@@ -98,15 +107,38 @@ export const PanelCanvas: React.FC<Props> = ({
   // Stable refs so event listeners don't need to be re-attached on every render
   const opRef    = useRef<ActiveOp | null>(null)
   const layoutRef = useRef(panel.layout)
-  const geoRef    = useRef(onWidgetGeometry)
+  const geoRef    = useRef(onWidgetGeometries)
   const snapRef   = useRef(snapToGrid)
   const vGuideRef = useRef<HTMLDivElement | null>(null)
   const hGuideRef = useRef<HTMLDivElement | null>(null)
   const canvasSizeRef = useRef({ w: panel.canvasWidth, h: panel.canvasHeight })
   useEffect(() => { layoutRef.current = panel.layout },   [panel.layout])
-  useEffect(() => { geoRef.current    = onWidgetGeometry }, [onWidgetGeometry])
+  useEffect(() => { geoRef.current    = onWidgetGeometries }, [onWidgetGeometries])
   useEffect(() => { snapRef.current   = snapToGrid },       [snapToGrid])
   useEffect(() => { canvasSizeRef.current = { w: panel.canvasWidth, h: panel.canvasHeight } }, [panel.canvasWidth, panel.canvasHeight])
+
+  // Pull fonts referenced by the panel from the service into this browser so
+  // widgets render with the exact typeface the desktop user picked (esp. LAN
+  // browsers that don't have custom/Chinese fonts installed).
+  useEffect(() => { ensurePanelFonts(panel.widgets) }, [panel.widgets])
+
+  // DOM geometry helpers — written inline during drags for zero React re-renders
+  function setGeom(id: string, x: number, y: number, w: number, h: number) {
+    const el = document.getElementById(`xw-${id}`)
+    if (!el) return
+    el.style.left = `${x}px`
+    el.style.top  = `${y}px`
+    el.style.width  = `${w}px`
+    el.style.height = `${h}px`
+  }
+  function clearGeom(id: string) {
+    const el = document.getElementById(`xw-${id}`)
+    if (!el) return
+    el.style.removeProperty('left')
+    el.style.removeProperty('top')
+    el.style.removeProperty('width')
+    el.style.removeProperty('height')
+  }
 
   // Attach global mouse handlers once; read latest state via refs
   useEffect(() => {
@@ -116,62 +148,35 @@ export const PanelCanvas: React.FC<Props> = ({
 
       const dx = e.clientX - op.mx0
       const dy = e.clientY - op.my0
-      let x = op.ox, y = op.oy, w = op.ow, h = op.oh
 
+      // ── Group move: primary widget snaps; members follow the same delta ──
       if (op.kind === 'move') {
-        x = op.ox + dx
-        y = op.oy + dy
-      } else {
-        switch (op.dir) {
-          case 'e':  w = Math.max(MIN_SIZE, op.ow + dx); break
-          case 's':  h = Math.max(MIN_SIZE, op.oh + dy); break
-          case 'se': w = Math.max(MIN_SIZE, op.ow + dx); h = Math.max(MIN_SIZE, op.oh + dy); break
-          case 'n': { const cd = Math.min(dy, op.oh - MIN_SIZE); y = op.oy + cd; h = op.oh - cd; break }
-          case 'w': { const cd = Math.min(dx, op.ow - MIN_SIZE); x = op.ox + cd; w = op.ow - cd; break }
-          case 'ne': {
-            w = Math.max(MIN_SIZE, op.ow + dx)
-            const cd = Math.min(dy, op.oh - MIN_SIZE); y = op.oy + cd; h = op.oh - cd; break
-          }
-          case 'sw': {
-            const cd = Math.min(dx, op.ow - MIN_SIZE); x = op.ox + cd; w = op.ow - cd
-            h = Math.max(MIN_SIZE, op.oh + dy); break
-          }
-          case 'nw': {
-            const cdx = Math.min(dx, op.ow - MIN_SIZE); x = op.ox + cdx; w = op.ow - cdx
-            const cdy = Math.min(dy, op.oh - MIN_SIZE); y = op.oy + cdy; h = op.oh - cdy; break
-          }
+        let x = op.ox + dx, y = op.oy + dy
+        if (snapRef.current) {
+          const G = 20
+          x = Math.round(x / G) * G
+          y = Math.round(y / G) * G
         }
-      }
-
-      // Update DOM directly — no React re-render during drag = buttery smooth
-      // Snap to grid if enabled
-      if (snapRef.current) {
-        const G = 20
-        const s = (v: number) => Math.round(v / G) * G
-        if (op.kind === 'move') {
-          x = s(x); y = s(y)
-        } else {
-          const fRight  = op.ox + op.ow
-          const fBottom = op.oy + op.oh
-          switch (op.dir) {
-            case 'e':  { const r = s(x + w); w = Math.max(G, r - x); break }
-            case 's':  { const b = s(y + h); h = Math.max(G, b - y); break }
-            case 'se': { const r = s(x + w); w = Math.max(G, r - x); const b = s(y + h); h = Math.max(G, b - y); break }
-            case 'n':  { y = s(y); h = Math.max(G, fBottom - y); break }
-            case 'w':  { x = s(x); w = Math.max(G, fRight  - x); break }
-            case 'ne': { y = s(y); h = Math.max(G, fBottom - y); const r2 = s(x + w); w = Math.max(G, r2 - x); break }
-            case 'sw': { x = s(x); w = Math.max(G, fRight - x); const b2 = s(y + h); h = Math.max(G, b2 - y); break }
-            case 'nw': { x = s(x); y = s(y); w = Math.max(G, fRight - x); h = Math.max(G, fBottom - y); break }
-          }
-        }
-      }
-
-      // Smart guides: snap a moved widget to other widgets' edges/centers and
-      // the canvas (left/right/top/bottom + center, both axes) — like Photoshop.
-      if (op.kind === 'move') {
-        const snap = smartSnap(x, y, w, h, layoutRef.current, op.id, canvasSizeRef.current.w, canvasSizeRef.current.h)
+        // Snap against everything NOT being dragged (incl. canvas edges/center)
+        const dragging = new Set([op.id, ...(op.group?.map(g => g.id) ?? [])])
+        const others = layoutRef.current.filter(l => !dragging.has(l.i))
+        const snap = smartSnap(x, y, op.ow, op.oh, others, op.id, canvasSizeRef.current.w, canvasSizeRef.current.h)
         x = snap.x
         y = snap.y
+        const ddx = x - (op.ox + dx)   // snap adjustment applied to the whole group
+        const ddy = y - (op.oy + dy)
+
+        const final = op.final ?? (op.final = new Map())
+        final.set(op.id, { x, y })
+        setGeom(op.id, x, y, op.ow, op.oh)
+        for (const g of op.group ?? []) {
+          if (g.id === op.id) continue
+          const mx = g.x + dx + ddx
+          const my = g.y + dy + ddy
+          final.set(g.id, { x: mx, y: my })
+          setGeom(g.id, mx, my, g.w, g.h)
+        }
+
         const vg = vGuideRef.current, hg = hGuideRef.current
         if (vg) {
           if (snap.vGuide !== null) { vg.style.display = 'block'; vg.style.left = `${snap.vGuide}px` }
@@ -181,15 +186,50 @@ export const PanelCanvas: React.FC<Props> = ({
           if (snap.hGuide !== null) { hg.style.display = 'block'; hg.style.top = `${snap.hGuide}px` }
           else hg.style.display = 'none'
         }
+        return
       }
 
-      const el = document.getElementById(`xw-${op.id}`)
-      if (el) {
-        el.style.left   = `${x}px`
-        el.style.top    = `${y}px`
-        el.style.width  = `${w}px`
-        el.style.height = `${h}px`
+      // ── Resize (single widget) ──
+      let x = op.ox, y = op.oy, w = op.ow, h = op.oh
+      switch (op.dir) {
+        case 'e':  w = Math.max(MIN_SIZE, op.ow + dx); break
+        case 's':  h = Math.max(MIN_SIZE, op.oh + dy); break
+        case 'se': w = Math.max(MIN_SIZE, op.ow + dx); h = Math.max(MIN_SIZE, op.oh + dy); break
+        case 'n': { const cd = Math.min(dy, op.oh - MIN_SIZE); y = op.oy + cd; h = op.oh - cd; break }
+        case 'w': { const cd = Math.min(dx, op.ow - MIN_SIZE); x = op.ox + cd; w = op.ow - cd; break }
+        case 'ne': {
+          w = Math.max(MIN_SIZE, op.ow + dx)
+          const cd = Math.min(dy, op.oh - MIN_SIZE); y = op.oy + cd; h = op.oh - cd; break
+        }
+        case 'sw': {
+          const cd = Math.min(dx, op.ow - MIN_SIZE); x = op.ox + cd; w = op.ow - cd
+          h = Math.max(MIN_SIZE, op.oh + dy); break
+        }
+        case 'nw': {
+          const cdx = Math.min(dx, op.ow - MIN_SIZE); x = op.ox + cdx; w = op.ow - cdx
+          const cdy = Math.min(dy, op.oh - MIN_SIZE); y = op.oy + cdy; h = op.oh - cdy; break
+        }
       }
+
+      // Snap to grid if enabled
+      if (snapRef.current) {
+        const G = 20
+        const s = (v: number) => Math.round(v / G) * G
+        const fRight  = op.ox + op.ow
+        const fBottom = op.oy + op.oh
+        switch (op.dir) {
+          case 'e':  { const r = s(x + w); w = Math.max(G, r - x); break }
+          case 's':  { const b = s(y + h); h = Math.max(G, b - y); break }
+          case 'se': { const r = s(x + w); w = Math.max(G, r - x); const b = s(y + h); h = Math.max(G, b - y); break }
+          case 'n':  { y = s(y); h = Math.max(G, fBottom - y); break }
+          case 'w':  { x = s(x); w = Math.max(G, fRight  - x); break }
+          case 'ne': { y = s(y); h = Math.max(G, fBottom - y); const r2 = s(x + w); w = Math.max(G, r2 - x); break }
+          case 'sw': { x = s(x); w = Math.max(G, fRight - x); const b2 = s(y + h); h = Math.max(G, b2 - y); break }
+          case 'nw': { x = s(x); y = s(y); w = Math.max(G, fRight - x); h = Math.max(G, fBottom - y); break }
+        }
+      }
+
+      setGeom(op.id, x, y, w, h)
     }
 
     function onMouseUp() {
@@ -201,19 +241,29 @@ export const PanelCanvas: React.FC<Props> = ({
       if (vGuideRef.current) vGuideRef.current.style.display = 'none'
       if (hGuideRef.current) hGuideRef.current.style.display = 'none'
 
-      // Only commit if the drag actually moved (inline styles were written).
-      // A plain click never sets el.style.left, so el.style.left is '' — skip commit.
-      const el = document.getElementById(`xw-${op.id}`)
-      if (el && el.style.left !== '') {
-        const x = parseFloat(el.style.left)   || 0
-        const y = parseFloat(el.style.top)    || 0
-        const w = parseFloat(el.style.width)  || MIN_SIZE
-        const h = parseFloat(el.style.height) || MIN_SIZE
-        el.style.removeProperty('left')
-        el.style.removeProperty('top')
-        el.style.removeProperty('width')
-        el.style.removeProperty('height')
-        geoRef.current(op.id, { x, y, w, h })
+      // Group move: commit every widget that was actually dragged (op.final is
+      // only populated when mousemove fired, so a plain click commits nothing).
+      if (op.kind === 'move' && op.final) {
+        const updates: GeomUpdate[] = []
+        for (const [id, { x, y }] of op.final) {
+          clearGeom(id)
+          updates.push({ id, geom: { x, y } })
+        }
+        if (updates.length) geoRef.current(updates)
+        return
+      }
+
+      // Resize: only commit if inline styles were written during the drag.
+      if (op.kind === 'resize') {
+        const el = document.getElementById(`xw-${op.id}`)
+        if (el && el.style.left !== '') {
+          const x = parseFloat(el.style.left)   || 0
+          const y = parseFloat(el.style.top)    || 0
+          const w = parseFloat(el.style.width)  || MIN_SIZE
+          const h = parseFloat(el.style.height) || MIN_SIZE
+          clearGeom(op.id)
+          geoRef.current([{ id: op.id, geom: { x, y, w, h } }])
+        }
       }
     }
 
@@ -225,16 +275,21 @@ export const PanelCanvas: React.FC<Props> = ({
     }
   }, []) // empty deps — stable via refs
 
-  function startMove(e: React.MouseEvent, widgetId: string) {
+  function startMove(e: React.MouseEvent, widgetId: string, groupIds: string[]) {
     e.stopPropagation()
     e.preventDefault()
     const item = layoutRef.current.find(l => l.i === widgetId)
     if (!item) return
+    const group: GroupMember[] = groupIds
+      .map(id => layoutRef.current.find(l => l.i === id))
+      .filter((l): l is LayoutItem => !!l)
+      .map(l => ({ id: l.i, x: l.x, y: l.y, w: l.w, h: l.h }))
     document.body.style.cursor = 'grabbing'
     opRef.current = {
       kind: 'move', id: widgetId,
       mx0: e.clientX, my0: e.clientY,
       ox: item.x, oy: item.y, ow: item.w, oh: item.h,
+      group,
     }
   }
 
@@ -251,9 +306,11 @@ export const PanelCanvas: React.FC<Props> = ({
     }
   }
 
+  const primaryId = selectedWidgetIds[selectedWidgetIds.length - 1] ?? null
+
   return (
     <Box
-      onClick={e => { if (e.target === e.currentTarget) { onSelect(null); onCanvasSelect?.() } }}
+      onClick={e => { if (e.target === e.currentTarget) { onSelect(null, false); onCanvasSelect?.() } }}
       onMouseDown={e => {
         // Middle button: pan the canvas from anywhere (e.g. after zooming in).
         if (e.button === 1) { e.preventDefault(); onPanStart?.(e); return }
@@ -296,7 +353,7 @@ export const PanelCanvas: React.FC<Props> = ({
       {panel.widgets.map(widget => {
         const item     = panel.layout.find(l => l.i === widget.id)
         if (!item) return null
-        const selected = selectedWidgetId === widget.id
+        const selected = selectedWidgetIds.includes(widget.id)
 
         return (
           <Box
@@ -329,11 +386,28 @@ export const PanelCanvas: React.FC<Props> = ({
             {isEditMode && (
               <Box
                 onMouseDown={e => {
-                  if (e.button === 0) {
-                    // Left-click selects first, then starts a drag.
-                    onSelect(widget.id)
-                    startMove(e, widget.id)
+                  if (e.button !== 0) return
+                  const additive = e.ctrlKey || e.metaKey
+                  if (additive) {
+                    // Ctrl+click on an already-selected widget → deselect only
+                    if (selectedWidgetIds.includes(widget.id)) {
+                      onSelect(widget.id, true)
+                      return
+                    }
+                    // Ctrl+click on an unselected widget → append to the group,
+                    // then drag the whole (extended) group together.
+                    onSelect(widget.id, true)
+                    startMove(e, widget.id, [...selectedWidgetIds, widget.id])
+                    return
                   }
+                  if (selectedWidgetIds.includes(widget.id)) {
+                    // Plain drag on a selected widget → move the entire group
+                    startMove(e, widget.id, selectedWidgetIds)
+                    return
+                  }
+                  // Plain click on an unselected widget → select it alone & drag
+                  onSelect(widget.id, false)
+                  startMove(e, widget.id, [widget.id])
                 }}
                 sx={{
                   position: 'absolute', inset: 0,
@@ -343,8 +417,8 @@ export const PanelCanvas: React.FC<Props> = ({
               />
             )}
 
-            {/* 8-direction resize handles — visible only on selected widget */}
-            {isEditMode && selected && HANDLES.map(({ dir, style }) => (
+            {/* 8-direction resize handles — visible only on the primary (last-selected) widget */}
+            {isEditMode && selected && primaryId === widget.id && HANDLES.map(({ dir, style }) => (
               <Box
                 key={dir}
                 component="div"

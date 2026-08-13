@@ -103,9 +103,104 @@ public sealed class HardwareMonitor : IDisposable
         foreach (var s in raw)
             if (seen.Add(s.Id)) sensors.Add(s);
 
+        sensors = KeepPhysicalMemoryUsage(sensors);
+        sensors = AddTotalNetworkThroughput(sensors);
+
         return new HardwareSnapshot(
             DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             sensors);
+    }
+
+    /// <summary>
+    /// LHM can surface RAM usage twice: a commit-based entry whose Used+Available
+    /// equals the commit limit (physical RAM + pagefile — far larger than real
+    /// RAM) plus the real physical entry. Any consumer that takes the first match
+    /// (panels, sensor pickers, custom widgets) then reads the wrong, too-low
+    /// usage. Keep only the physical entry — the one with the smallest
+    /// Used+Available total — and drop the Load/Used/Available/Total sensors of
+    /// the other memory entries. Per-module sensors (Capacity, Timing) are never
+    /// touched. Fails open (returns the input unchanged) when there aren't ≥2
+    /// computable memory entries to disambiguate.
+    /// </summary>
+    private static List<SensorReading> KeepPhysicalMemoryUsage(List<SensorReading> sensors)
+    {
+        static bool IsUsage(SensorReading s) => s.Category == "RAM" && (
+            s.Type == "Load"
+            || (s.Type == "Data" && (s.Name.Contains("Used") || s.Name.Contains("Available") || s.Name == "Total Physical Memory")));
+
+        var groups = sensors.Where(IsUsage).GroupBy(s => HardwareKey(s.Id)).ToList();
+        if (groups.Count < 2) return sensors;
+
+        // Total per memory entry = Used + Available.
+        var totals = new Dictionary<string, float>(groups.Count);
+        foreach (var g in groups)
+        {
+            float? used = null, avail = null;
+            foreach (var s in g)
+            {
+                if (s.Type != "Data" || s.Value is null) continue;
+                if (s.Name.Contains("Used")) used = s.Value;
+                else if (s.Name.Contains("Available")) avail = s.Value;
+            }
+            if (used.HasValue && avail.HasValue)
+                totals[g.Key] = used.Value + avail.Value;
+        }
+        if (totals.Count < 2) return sensors; // fail-open: can't tell the entries apart
+
+        var physicalKey = totals.MinBy(kv => kv.Value).Key;
+        return sensors.Where(s => !IsUsage(s) || HardwareKey(s.Id) == physicalKey).ToList();
+    }
+
+    /// <summary>Sensor id minus the trailing "/type/index" → identifies the owning hardware entry.</summary>
+    private static string HardwareKey(string id)
+    {
+        var i = id.LastIndexOf('/');
+        if (i > 0) i = id.LastIndexOf('/', i - 1);
+        return i > 0 ? id[..i] : id;
+    }
+
+    /// <summary>
+    /// Synthesizes combined network throughput: sums every NIC's upload / download
+    /// throughput into a single pair of sensors ("Total Upload Speed" /
+    /// "Total Download Speed", hardware "Network Total") so the UI — panels, the
+    /// sensor picker and custom widgets — can show the aggregate traffic of all
+    /// adapters at once. Only adds a total when at least one NIC of that direction
+    /// actually reported a value.
+    /// </summary>
+    private static List<SensorReading> AddTotalNetworkThroughput(List<SensorReading> sensors)
+    {
+        float totalUl = 0f, totalDl = 0f;
+        bool hasUl = false, hasDl = false;
+        foreach (var s in sensors)
+        {
+            if (s.Category != "Network" || s.Type != "Throughput" || s.Value is null) continue;
+            if (s.Name.Contains("upload", StringComparison.OrdinalIgnoreCase)) { totalUl += s.Value.Value; hasUl = true; }
+            else if (s.Name.Contains("download", StringComparison.OrdinalIgnoreCase)) { totalDl += s.Value.Value; hasDl = true; }
+        }
+        if (!hasUl && !hasDl) return sensors;
+
+        var result = new List<SensorReading>(sensors);
+        if (hasUl)
+            result.Add(new SensorReading(
+                Id: "network/total/upload_speed",
+                Name: "Total Upload Speed",
+                Category: "Network",
+                Type: "Throughput",
+                Value: (float)Math.Round(totalUl, 2),
+                Unit: "Mbps",
+                HardwareName: "Network Total"
+            ));
+        if (hasDl)
+            result.Add(new SensorReading(
+                Id: "network/total/download_speed",
+                Name: "Total Download Speed",
+                Category: "Network",
+                Type: "Throughput",
+                Value: (float)Math.Round(totalDl, 2),
+                Unit: "Mbps",
+                HardwareName: "Network Total"
+            ));
+        return result;
     }
 
     /// <summary>

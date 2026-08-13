@@ -1,10 +1,11 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { Box, Typography } from '@mui/material'
 import MemoryIcon from '@mui/icons-material/Memory'
 import SettingsInputComponentIcon from '@mui/icons-material/SettingsInputComponent'
 import StorageIcon from '@mui/icons-material/Storage'
 import DnsIcon from '@mui/icons-material/Dns'
 import InfoIcon from '@mui/icons-material/Info'
+import AccessTimeIcon from '@mui/icons-material/AccessTime'
 import type { PanelWidget } from '@/types/panel'
 import { useSystemInfo } from '@/hooks/useSystemInfo'
 
@@ -17,6 +18,18 @@ function formatBytes(bytes: number): string {
   const gb = bytes / (1024 * 1024 * 1024)
   if (gb >= 1024) return `${(gb / 1024).toFixed(2)} TB`
   return `${gb.toFixed(0)} GB`
+}
+
+// "2d 15:44:58" when ≥ 1 day, otherwise "15:44:58".
+function formatUptime(totalSeconds: number): string {
+  const s   = Math.max(0, Math.floor(totalSeconds))
+  const d   = Math.floor(s / 86400)
+  const h   = Math.floor((s % 86400) / 3600)
+  const m   = Math.floor((s % 3600) / 60)
+  const sec = s % 60
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const hhmmss = `${pad(h)}:${pad(m)}:${pad(sec)}`
+  return d > 0 ? `${d}d ${hhmmss}` : hhmmss
 }
 
 /**
@@ -33,11 +46,22 @@ export const SystemInfoWidget: React.FC<Props> = ({ widget }) => {
   const showRamSpeed = widget.sysShowRamSpeed ?? true
   const showOs       = widget.sysShowOs       ?? true
   const showDisks   = widget.sysShowDisks    ?? true
+  const showUptime  = widget.sysShowUptime   ?? true
   const showLabels  = widget.sysShowLabels   ?? true
   const showIcons   = widget.sysShowIcons    ?? true
   const iconColor   = widget.sysIconColor    ?? widget.accentColor ?? '#03dac6'
   const disksToShow = widget.sysDisksToShow ?? []
   const align       = widget.sysTextAlign   ?? 'left'
+
+  // Uptime comes from the backend as a base value; tick it locally every second
+  // so it stays live without re-polling the (rarely-refreshed) /api/systeminfo.
+  const [uptime, setUptime] = useState<number>(info?.uptimeSeconds ?? 0)
+  useEffect(() => {
+    if (typeof info?.uptimeSeconds !== 'number') return
+    setUptime(info.uptimeSeconds)
+    const id = setInterval(() => setUptime(u => u + 1), 1000)
+    return () => clearInterval(id)
+  }, [info?.uptimeSeconds])
 
   // Base text style (mirrors SensorValueWidget — respects per-element styling).
   const labelStyle: React.CSSProperties = {
@@ -98,6 +122,9 @@ export const SystemInfoWidget: React.FC<Props> = ({ widget }) => {
   }
   if (showOs && info.osName) {
     rows.push({ icon: <InfoIcon sx={{ fontSize: 14, color: iconColor }} />, label: 'OS', value: `${info.osName} (${info.osVersion})` })
+  }
+  if (showUptime && typeof info.uptimeSeconds === 'number') {
+    rows.push({ icon: <AccessTimeIcon sx={{ fontSize: 14, color: iconColor }} />, label: 'Uptime', value: formatUptime(uptime) })
   }
   if (showDisks && info.disks.length > 0) {
     for (const d of info.disks) {

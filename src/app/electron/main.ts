@@ -9,9 +9,12 @@ import {
   dialog,
 } from 'electron'
 import { join, resolve } from 'path'
-import { spawn, ChildProcess } from 'child_process'
+import { spawn, execFile, ChildProcess } from 'child_process'
+import { promisify } from 'util'
 import { networkInterfaces } from 'os'
 import { readFileSync, writeFileSync } from 'fs'
+
+const execFileAsync = promisify(execFile)
 
 // ── Persistent config ─────────────────────────────────────────────────────────
 function configPath(): string { return join(app.getPath('userData'), 'xstat-config.json') }
@@ -343,6 +346,39 @@ ipcMain.handle('workspace:readFile', (_event, filePath: string) => {
   } catch (err) {
     console.error('[XStat] workspace:readFile failed:', err)
     return { ok: false as const }
+  }
+})
+
+// ── Installed fonts (dynamic list for the font pickers) ─────────────────────
+// Enumerates fonts actually installed on the OS via System.Drawing, so the
+// editor's font dropdown shows real choices (incl. Chinese fonts) instead of a
+// hardcoded list. Result is cached for the app's lifetime.
+let _fontCache: string[] | null = null
+
+ipcMain.handle('fonts:list', async () => {
+  if (_fontCache) return _fontCache
+  try {
+    const script = [
+      // Force UTF-8 so localized (Chinese) font names survive the pipe to Node.
+      '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8;',
+      '$OutputEncoding = [System.Text.Encoding]::UTF8;',
+      'Add-Type -AssemblyName System.Drawing;',
+      '$f = (New-Object System.Drawing.Text.InstalledFontCollection).Families;',
+      '$n = foreach ($x in $f) { try { $x.GetName([System.Globalization.CultureInfo]::CurrentUICulture.LCID) } catch { $x.Name } };',
+      '$n | Sort-Object -Unique | ConvertTo-Json -Compress',
+    ].join(' ')
+    const { stdout } = await execFileAsync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', script], {
+      timeout: 20_000,
+      windowsHide: true,
+    })
+    const parsed = JSON.parse(stdout.trim())
+    _fontCache = Array.isArray(parsed)
+      ? parsed.filter((n: unknown): n is string => typeof n === 'string' && n.trim().length > 0)
+      : []
+    return _fontCache
+  } catch (err) {
+    console.error('[XStat] fonts:list failed:', err)
+    return []
   }
 })
 

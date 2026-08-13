@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Management;
 using Microsoft.AspNetCore.Mvc;
 using XStat.Service.Hardware;
@@ -43,7 +44,8 @@ public sealed class SystemInfoController : ControllerBase
                 RamSpeedMhz:   ramSpeed,
                 RamType:       ramType,
                 RamSticks:     ram,
-                Disks:         disks
+                Disks:         disks,
+                UptimeSeconds: os.uptimeSeconds
             ));
         }
                catch (Exception ex)
@@ -53,10 +55,10 @@ public sealed class SystemInfoController : ControllerBase
         }
     }
 
-    private (string name, string version) QueryOs()
+    private (string name, string version, long uptimeSeconds) QueryOs()
     {
         using var searcher = new ManagementObjectSearcher(
-            "SELECT Caption, Version, BuildNumber FROM Win32_OperatingSystem");
+            "SELECT Caption, Version, BuildNumber, LastBootUpTime FROM Win32_OperatingSystem");
         foreach (var mo in searcher.Get().Cast<ManagementObject>())
         {
             var caption     = mo["Caption"]?.ToString()?.Trim() ?? "";
@@ -65,9 +67,23 @@ public sealed class SystemInfoController : ControllerBase
             // Normalize "Microsoft Windows 11 ..." → "Windows 11 ..."
             if (caption.StartsWith("Microsoft ", StringComparison.OrdinalIgnoreCase))
                 caption = caption["Microsoft ".Length..];
-            return (caption, $"{version} (Build {buildNumber})");
+
+            // Uptime = now − LastBootUpTime (WMI DMTF format, minute precision).
+            var uptimeSeconds = 0L;
+            try
+            {
+                if (mo["LastBootUpTime"] is { } lastBootObj &&
+                    DateTime.TryParse(ManagementDateTimeConverter.ToDateTime(lastBootObj.ToString()!).ToString(CultureInfo.InvariantCulture),
+                                      CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out var lastBoot))
+                {
+                    uptimeSeconds = (long)(DateTime.Now - lastBoot).TotalSeconds;
+                }
+            }
+            catch { /* uptime stays 0 if unavailable */ }
+
+            return (caption, $"{version} (Build {buildNumber})", uptimeSeconds);
         }
-        return ("Unknown", "");
+        return ("Unknown", "", 0);
     }
 
     private static string QueryCpuModel()

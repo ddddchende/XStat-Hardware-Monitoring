@@ -38,10 +38,13 @@ builder.Services.AddCors(opts =>
             .SetIsOriginAllowed(origin =>
             {
                 if (string.IsNullOrEmpty(origin)) return false;
+                // Electron renderer loads via file:// in production; such pages
+                // send "Origin: null" — check before parsing, since "null" is
+                // not a valid URI and new Uri() would throw (→ 500 on fonts).
+                if (origin == "null" || origin.StartsWith("file://")) return true;
                 var uri = new Uri(origin);
-                // Allow Electron renderer (file://, null) and localhost dev server
+                // Allow localhost dev server / local Electron renderer
                 if (uri.Host is "localhost" or "127.0.0.1" or "::1")   return true;
-                if (origin.StartsWith("file://") || origin == "null")   return true;
                 // Allow LAN browsers that load the panel served by this same service.
                 // The panel page is same-origin, so SignalR won't send an Origin header;
                 // but pre-flight requests from some frameworks might. Allow private ranges.
@@ -65,7 +68,18 @@ var app = builder.Build();
 
 app.UseCors();
 app.UseDefaultFiles();
-app.UseStaticFiles();
+app.UseStaticFiles(new StaticFileOptions
+{
+    OnPrepareResponse = ctx =>
+    {
+        // HTML entry pages must always revalidate so browsers (esp. phones)
+        // pick up new hashed bundles after an app update — prevents stale
+        // panels that silently lack newly added features.
+        var path = ctx.Context.Request.Path.Value;
+        if (path?.EndsWith(".html", StringComparison.OrdinalIgnoreCase) == true)
+            ctx.Context.Response.Headers.CacheControl = "no-cache";
+    },
+});
 
 app.MapControllers();
 app.MapHub<SensorHub>("/hubs/sensors");

@@ -23,6 +23,7 @@ import { useSensorHistory }  from '@/hooks/useSensorHistory'
 import { WidgetPalette }     from '@/components/WidgetPalette'
 import { WidgetProperties }  from '@/components/WidgetProperties'
 import { CanvasProperties }  from '@/components/CanvasProperties'
+import { MultiSelectProperties } from '@/components/MultiSelectProperties'
 import { PanelCanvas }       from '@/components/PanelCanvas'
 import type { HardwareSnapshot } from '@/types/sensors'
 import type { WidgetType, PanelWidget, PanelLayout } from '@/types/panel'
@@ -38,8 +39,8 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
   const { t } = useTranslation()
   const {
     panels, activePanel,
-    updateLayout, addWidget, updateWidget, removeWidget, duplicateWidget, importWidget,
-    updateWidgetGeometry, updateCanvasSize,
+    updateLayout, addWidget, updateWidget, removeWidgets, duplicateWidgets, importWidget,
+    updateWidgetGeometries, updateWidgetGeometry, updateCanvasSize,
     createPanel, deletePanel, renamePanel, setActivePanel,
     updateCanvasBackground, updateCanvasSettings,
     exportWorkspace, loadWorkspace,
@@ -49,7 +50,7 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
   const history = useSensorHistory(snapshot)
 
   const [isEditMode,       setIsEditMode]       = useState(true)
-  const [selectedWidgetId, setSelectedWidgetId] = useState<string | null>(null)
+  const [selectedWidgetIds, setSelectedWidgetIds] = useState<string[]>([])
   const [canvasSelected,   setCanvasSelected]   = useState(false)
   const [renamingPanel,    setRenamingPanel]     = useState(false)
   const [renameValue,      setRenameValue]       = useState('')
@@ -93,6 +94,21 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
         e.preventDefault()
         saveRef.current()
       }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  // Delete / Backspace removes all selected widgets (ignored while typing).
+  const removeSelectedRef = useRef(handleRemoveSelected)
+  useEffect(() => { removeSelectedRef.current = handleRemoveSelected })
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== 'Delete' && e.key !== 'Backspace') return
+      const el = document.activeElement
+      if (el instanceof HTMLElement && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return
+      e.preventDefault()
+      removeSelectedRef.current()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -142,26 +158,53 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
     })
   }, [])
 
-  const selectedWidget = activePanel.widgets.find(w => w.id === selectedWidgetId) ?? null
+  const selectedWidgets = activePanel.widgets.filter(w => selectedWidgetIds.includes(w.id))
+  const selectedWidget = selectedWidgets.length === 1 ? selectedWidgets[0] : null
 
   // ── Handlers ────────────────────────────────────────────────────────────
+  // Canvas selection: id === null clears the selection (empty canvas click).
+  // additive (Ctrl/Cmd) toggles membership; otherwise replaces the selection.
+  function handleSelect(id: string | null, additive = false) {
+    if (id === null) {
+      setSelectedWidgetIds([])
+      setCanvasSelected(false)
+      return
+    }
+    setCanvasSelected(false)
+    if (additive) {
+      setSelectedWidgetIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+    } else {
+      setSelectedWidgetIds([id])
+    }
+  }
+
   function handleAddWidget(type: WidgetType, overrides?: Partial<PanelWidget>) {
     const id = addWidget(type, overrides)
-    setSelectedWidgetId(id)
+    setSelectedWidgetIds([id])
   }
 
   function handleRemove(id: string) {
-    removeWidget(id)
-    setSelectedWidgetId(null)
+    removeWidgets([id])
+    setSelectedWidgetIds([])
+  }
+
+  function handleRemoveSelected() {
+    removeWidgets(selectedWidgetIds)
+    setSelectedWidgetIds([])
   }
 
   function handleDuplicate(id: string) {
-    const newId = duplicateWidget(id)
-    if (newId) setSelectedWidgetId(newId)
+    const newIds = duplicateWidgets([id])
+    if (newIds.length) setSelectedWidgetIds(newIds)
+  }
+
+  function handleDuplicateSelected() {
+    const newIds = duplicateWidgets(selectedWidgetIds)
+    if (newIds.length) setSelectedWidgetIds(newIds)
   }
 
   function handleCanvasSelect() {
-    setSelectedWidgetId(null)
+    setSelectedWidgetIds([])
     setCanvasSelected(true)
   }
 
@@ -230,7 +273,7 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
     loadWorkspace(ws)
     setCurrentFilePath(res.filePath ?? null)
     persistFilePath(res.filePath ?? null)
-    setSelectedWidgetId(null)
+    setSelectedWidgetIds([])
     setCanvasSelected(false)
   }
 
@@ -262,7 +305,7 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
 
   function handleImportWidget(data: { version?: number; widget: PanelWidget }) {
     const id = importWidget(data)
-    if (id) setSelectedWidgetId(id)
+    if (id) setSelectedWidgetIds([id])
   }
 
   function startRename() {
@@ -293,7 +336,7 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
         <Tooltip title={isEditMode ? t('panelEditor.switchToPreview') : t('panelEditor.switchToEdit')} arrow>
           <IconButton
             size="small"
-            onClick={() => { setIsEditMode(m => !m); setSelectedWidgetId(null) }}
+            onClick={() => { setIsEditMode(m => !m); setSelectedWidgetIds([]) }}
             sx={{
               borderRadius: 1.5,
               color: isEditMode ? 'primary.main' : 'text.secondary',
@@ -348,7 +391,7 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
             <MenuItem
               key={p.id}
               selected={p.id === activePanel.id}
-              onClick={() => { setActivePanel(p.id); setPanelMenuAnchor(null); setSelectedWidgetId(null) }}
+              onClick={() => { setActivePanel(p.id); setPanelMenuAnchor(null); setSelectedWidgetIds([]) }}
               sx={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', pr: 0.5 }}
             >
               <span>{p.name}</span>
@@ -458,10 +501,10 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
             <InputLabel shrink sx={{ fontSize: '0.75rem' }}>{t('panelEditor.selectWidget')}</InputLabel>
             <Select
               label={t('panelEditor.selectWidget')}
-              value={selectedWidgetId ?? ''}
+              value={selectedWidgetIds.length ? selectedWidgetIds[selectedWidgetIds.length - 1] : ''}
               onChange={e => {
                 const id = e.target.value as string
-                setSelectedWidgetId(id || null)
+                setSelectedWidgetIds(id ? [id] : [])
                 setCanvasSelected(false)
               }}
               displayEmpty
@@ -598,9 +641,9 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
               history={history}
               isEditMode={isEditMode}
               snapToGrid={snapToGrid}
-              selectedWidgetId={selectedWidgetId}
-              onSelect={id => { setSelectedWidgetId(id); setCanvasSelected(false) }}
-              onWidgetGeometry={updateWidgetGeometry}
+              selectedWidgetIds={selectedWidgetIds}
+              onSelect={handleSelect}
+              onWidgetGeometries={updateWidgetGeometries}
               onPanStart={handlePanStart}
               onCanvasSelect={handleCanvasSelect}
             />
@@ -608,7 +651,7 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
         </Box>
 
         {/* Right: Properties panel */}
-        {isEditMode && (selectedWidget || canvasSelected) && (
+        {isEditMode && (selectedWidgets.length > 0 || canvasSelected) && (
           <Box
             sx={{
               width: 248, flexShrink: 0,
@@ -616,7 +659,13 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
               overflowY: 'auto',
             }}
           >
-            {selectedWidget ? (
+            {selectedWidgets.length > 1 ? (
+              <MultiSelectProperties
+                count={selectedWidgets.length}
+                onDuplicate={handleDuplicateSelected}
+                onRemove={handleRemoveSelected}
+              />
+            ) : selectedWidget ? (
               <WidgetProperties
                 widget={selectedWidget}
                 layout={activePanel.layout.find(l => l.i === selectedWidget.id)}
