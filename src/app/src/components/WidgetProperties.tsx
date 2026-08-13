@@ -21,6 +21,7 @@ import KeyboardDoubleArrowDownIcon  from '@mui/icons-material/KeyboardDoubleArro
 import type { PanelWidget, LayoutItem } from '@/types/panel'
 import type { HardwareSnapshot } from '@/types/sensors'
 import { SensorPickerDialog }   from '@/components/SensorPickerDialog'
+import { useSystemInfo } from '@/hooks/useSystemInfo'
 
 const PRESET_COLORS = [
   '#03dac6', '#7c6ef5', '#4caf50', '#ff9800',
@@ -292,6 +293,9 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
   const [sensorDialogOpen, setSensorDialogOpen] = useState(false)
   const [renamingWidget, setRenamingWidget] = useState(false)
   const [renameValue, setRenameValue] = useState('')
+  // Shared system info cache — used to enumerate available disk drive letters
+  // for the SystemInfo widget's per-disk visibility picker.
+  const { info: sysInfo } = useSystemInfo()
 
   function startRename() {
     setRenameValue(widget.widgetName ?? widget.type.replace(/([A-Z])/g, ' $1').trim())
@@ -1029,6 +1033,140 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
               sx={{ width: '100%', accentColor: 'primary.main', cursor: 'pointer' }}
             />
           </Box>
+        </Box>
+      )}
+
+      {/* ── SystemInfo widget — field visibility ─────────────────── */}
+      {widget.type === 'SystemInfo' && (
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+          <SectionLabel>{t('widgetProperties.systemInfo')}</SectionLabel>
+          <FormControlLabel
+            control={<Switch size="small" checked={widget.sysShowCpu      ?? true} onChange={e => onUpdate({ sysShowCpu:      e.target.checked })} />}
+            label={t('widgetProperties.sysShowCpu')}      sx={{ m: 0 }}
+          />
+          <FormControlLabel
+            control={<Switch size="small" checked={widget.sysShowGpu      ?? true} onChange={e => onUpdate({ sysShowGpu:      e.target.checked })} />}
+            label={t('widgetProperties.sysShowGpu')}      sx={{ m: 0 }}
+          />
+          <FormControlLabel
+            control={<Switch size="small" checked={widget.sysShowRamTotal ?? true} onChange={e => onUpdate({ sysShowRamTotal: e.target.checked })} />}
+            label={t('widgetProperties.sysShowRamTotal')} sx={{ m: 0 }}
+          />
+          <FormControlLabel
+            control={<Switch size="small" checked={widget.sysShowRamSpeed ?? true} onChange={e => onUpdate({ sysShowRamSpeed: e.target.checked })} />}
+            label={t('widgetProperties.sysShowRamSpeed')} sx={{ m: 0 }}
+          />
+          <FormControlLabel
+            control={<Switch size="small" checked={widget.sysShowOs       ?? true} onChange={e => onUpdate({ sysShowOs:       e.target.checked })} />}
+            label={t('widgetProperties.sysShowOs')}       sx={{ m: 0 }}
+          />
+          <FormControlLabel
+            control={<Switch size="small" checked={widget.sysShowDisks    ?? true} onChange={e => onUpdate({ sysShowDisks:    e.target.checked })} />}
+            label={t('widgetProperties.sysShowDisks')}    sx={{ m: 0 }}
+          />
+
+          <Divider sx={{ my: 0.5 }} />
+
+          <FormControlLabel
+            control={<Switch size="small" checked={widget.sysShowLabels ?? true} onChange={e => onUpdate({ sysShowLabels: e.target.checked })} />}
+            label={t('widgetProperties.sysShowLabels')} sx={{ m: 0 }}
+          />
+          <FormControlLabel
+            control={<Switch size="small" checked={widget.sysShowIcons  ?? true} onChange={e => onUpdate({ sysShowIcons:  e.target.checked })} />}
+            label={t('widgetProperties.sysShowIcons')}  sx={{ m: 0 }}
+          />
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+            <Typography variant="caption" sx={{ color: 'text.secondary', flexShrink: 0 }}>
+              {t('widgetProperties.align')}
+            </Typography>
+            <ToggleButtonGroup
+              size="small"
+              exclusive
+              value={widget.sysTextAlign ?? 'left'}
+              onChange={(_, v) => v && onUpdate({ sysTextAlign: v })}
+            >
+              <ToggleButton value="left"><FormatAlignLeftIcon fontSize="small" /></ToggleButton>
+              <ToggleButton value="center"><FormatAlignCenterIcon fontSize="small" /></ToggleButton>
+              <ToggleButton value="right"><FormatAlignRightIcon fontSize="small" /></ToggleButton>
+            </ToggleButtonGroup>
+          </Box>
+          {(widget.sysShowIcons ?? true) && (
+            <Box sx={{ mt: 0.5 }}>
+              <SectionLabel>{t('widgetProperties.sysIconColor')}</SectionLabel>
+              <ColorSwatchesPicker
+                value={widget.sysIconColor ?? widget.accentColor ?? '#03dac6'}
+                onChange={c => onUpdate({ sysIconColor: c })}
+              />
+            </Box>
+          )}
+
+          {(widget.sysShowDisks ?? true) && (
+            <Box sx={{ mt: 0.5 }}>
+              <SectionLabel>{t('widgetProperties.sysDisksToShow')}</SectionLabel>
+              <Autocomplete
+                multiple
+                size="small"
+                disableCloseOnSelect
+                options={(sysInfo?.disks ?? [])
+                  .filter(d => !!d.driveLetter)
+                  .map(d => ({ driveLetter: d.driveLetter, label: d.label || '' }))}
+                getOptionLabel={opt => opt.label ? `${opt.driveLetter} ${opt.label}`.trim() : opt.driveLetter}
+                isOptionEqualToValue={(a, b) => a.driveLetter === b.driveLetter}
+                value={(sysInfo?.disks ?? [])
+                  .filter(d => !!d.driveLetter && (widget.sysDisksToShow ?? []).includes(d.driveLetter))
+                  .map(d => ({ driveLetter: d.driveLetter, label: d.label || '' }))}
+                onChange={(_, selected) => {
+                  onUpdate({ sysDisksToShow: selected.map(s => s.driveLetter) })
+                }}
+                renderInput={params => (
+                  <TextField
+                    {...params}
+                    placeholder={t('widgetProperties.sysDisksToShowPlaceholder')}
+                  />
+                )}
+                renderOption={(props, option) => (
+                  <li {...props}>
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                      <Typography component="span" sx={{ fontWeight: 600 }}>{option.driveLetter}</Typography>
+                      {option.label && <Typography component="span" sx={{ color: 'text.secondary' }}>{option.label}</Typography>}
+                    </Box>
+                  </li>
+                )}
+              />
+              <Typography variant="caption" sx={{ display: 'block', mt: 0.5, color: 'text.disabled' }}>
+                {t('widgetProperties.sysDisksToShowHint')}
+              </Typography>
+            </Box>
+          )}
+
+          <Divider sx={{ my: 0.5 }} />
+          <TextStyleSection
+            title={t('widgetProperties.label')}
+            color={widget.labelColor ?? 'rgba(255,255,255,0.55)'}
+            fontSize={widget.labelFontSize ?? 12}
+            bold={widget.labelBold ?? false}
+            fontFamily={widget.labelFontFamily ?? ''}
+            italic={widget.labelItalic ?? false}
+            onColorChange={c => onUpdate({ labelColor: c })}
+            onFontSizeChange={s => onUpdate({ labelFontSize: s })}
+            onBoldChange={b => onUpdate({ labelBold: b })}
+            onFontFamilyChange={f => onUpdate({ labelFontFamily: f || undefined })}
+            onItalicChange={i => onUpdate({ labelItalic: i })}
+          />
+          <Divider sx={{ my: 0.5 }} />
+          <TextStyleSection
+            title={t('widgetProperties.value')}
+            color={widget.color ?? '#fff'}
+            fontSize={widget.fontSize ?? 14}
+            bold={widget.valueBold ?? false}
+            fontFamily={widget.valueFontFamily ?? ''}
+            italic={widget.valueItalic ?? false}
+            onColorChange={c => onUpdate({ color: c })}
+            onFontSizeChange={s => onUpdate({ fontSize: s })}
+            onBoldChange={b => onUpdate({ valueBold: b })}
+            onFontFamilyChange={f => onUpdate({ valueFontFamily: f || undefined })}
+            onItalicChange={i => onUpdate({ valueItalic: i })}
+          />
         </Box>
       )}
     </Box>

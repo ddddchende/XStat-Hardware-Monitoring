@@ -10,6 +10,7 @@ import TextFieldsIcon    from '@mui/icons-material/TextFields'
 import CodeIcon          from '@mui/icons-material/Code'
 import ImageIcon         from '@mui/icons-material/Image'
 import CropSquareIcon    from '@mui/icons-material/CropSquare'
+import InfoIcon          from '@mui/icons-material/Info'
 import CategoryIcon      from '@mui/icons-material/Category'
 import UploadFileIcon    from '@mui/icons-material/UploadFile'
 import type { WidgetType, PanelWidget } from '@/types/panel'
@@ -44,6 +45,7 @@ const GROUPS: PaletteGroup[] = [
       { type: 'Clock', labelKey: 'palette.clock', icon: <AccessTimeIcon sx={{ fontSize: 18 }} />, hintKey: 'palette.clockHint' },
       { type: 'Text',  labelKey: 'palette.text',  icon: <TextFieldsIcon sx={{ fontSize: 18 }} />, hintKey: 'palette.textHint' },
       { type: 'Box',   labelKey: 'palette.box',   icon: <CropSquareIcon sx={{ fontSize: 18 }} />, hintKey: 'palette.boxHint' },
+      { type: 'SystemInfo', labelKey: 'palette.systemInfo', icon: <InfoIcon sx={{ fontSize: 18 }} />, hintKey: 'palette.systemInfoHint' },
     ],
   },
   {

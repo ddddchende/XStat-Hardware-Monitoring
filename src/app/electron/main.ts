@@ -6,6 +6,7 @@ import {
   Menu,
   Tray,
   nativeImage,
+  dialog,
 } from 'electron'
 import { join, resolve } from 'path'
 import { spawn, ChildProcess } from 'child_process'
@@ -284,6 +285,65 @@ ipcMain.handle('widget-editor:minimize', () => widgetEditorWindow?.minimize())
 ipcMain.handle('widget-editor:maximize', () => {
   if (widgetEditorWindow?.isMaximized()) widgetEditorWindow.unmaximize()
   else widgetEditorWindow?.maximize()
+})
+
+// ── Workspace file dialogs (Open / Save / Save As) ───────────────────────
+// Lets the editor treat a panel workspace as a regular file: open from disk,
+// Ctrl+S to save back to the same file, Save As to pick a new location.
+// Filters accept both the new workspace format ({panels, activePanelId}) and
+// legacy single-panel .xstatpanel exports for back-compat on open.
+
+ipcMain.handle('workspace:saveAs', async (_event, content: string) => {
+  if (!mainWindow) return { canceled: true }
+  const result = await dialog.showSaveDialog(mainWindow, {
+    title: 'Save Workspace',
+    defaultPath: 'workspace.xstatpanel',
+    filters: [
+      { name: 'XStat Workspace', extensions: ['xstatpanel', 'json'] },
+      { name: 'All Files', extensions: ['*'] },
+    ],
+  })
+  if (result.canceled || !result.filePath) return { canceled: true as const }
+  writeFileSync(result.filePath, content, 'utf8')
+  return { canceled: false as const, filePath: result.filePath }
+})
+
+ipcMain.handle('workspace:save', (_event, filePath: string, content: string) => {
+  try {
+    writeFileSync(filePath, content, 'utf8')
+    return { ok: true as const }
+  } catch (err) {
+    console.error('[XStat] workspace:save failed:', err)
+    return { ok: false as const }
+  }
+})
+
+ipcMain.handle('workspace:open', async () => {
+  if (!mainWindow) return { canceled: true as const }
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: 'Open Workspace',
+    properties: ['openFile'],
+    filters: [
+      { name: 'XStat Workspace', extensions: ['xstatpanel', 'json'] },
+      { name: 'All Files', extensions: ['*'] },
+    ],
+  })
+  if (result.canceled || result.filePaths.length === 0) return { canceled: true as const }
+  const filePath = result.filePaths[0]
+  const content = readFileSync(filePath, 'utf8')
+  return { canceled: false as const, filePath, content }
+})
+
+// Read a known path without showing a dialog — used to auto-reopen the last
+// workspace file on startup.
+ipcMain.handle('workspace:readFile', (_event, filePath: string) => {
+  try {
+    const content = readFileSync(filePath, 'utf8')
+    return { ok: true as const, content }
+  } catch (err) {
+    console.error('[XStat] workspace:readFile failed:', err)
+    return { ok: false as const }
+  }
 })
 
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ App lifecycle Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬

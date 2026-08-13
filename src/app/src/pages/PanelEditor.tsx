@@ -8,7 +8,8 @@ import EditIcon            from '@mui/icons-material/Edit'
 import VisibilityIcon      from '@mui/icons-material/Visibility'
 import AddIcon             from '@mui/icons-material/Add'
 import FileDownloadIcon    from '@mui/icons-material/FileDownload'
-import FileUploadIcon      from '@mui/icons-material/FileUpload'
+import FolderOpenIcon      from '@mui/icons-material/FolderOpen'
+import SaveIcon            from '@mui/icons-material/Save'
 import ExpandMoreIcon      from '@mui/icons-material/ExpandMore'
 import DeleteOutlineIcon   from '@mui/icons-material/DeleteOutline'
 import ZoomInIcon          from '@mui/icons-material/ZoomIn'
@@ -17,13 +18,14 @@ import UndoIcon             from '@mui/icons-material/Undo'
 import RedoIcon             from '@mui/icons-material/Redo'
 
 import { usePanelLayout }    from '@/hooks/usePanelLayout'
+import type { PanelsState }  from '@/hooks/usePanelLayout'
 import { useSensorHistory }  from '@/hooks/useSensorHistory'
 import { WidgetPalette }     from '@/components/WidgetPalette'
 import { WidgetProperties }  from '@/components/WidgetProperties'
 import { CanvasProperties }  from '@/components/CanvasProperties'
 import { PanelCanvas }       from '@/components/PanelCanvas'
 import type { HardwareSnapshot } from '@/types/sensors'
-import type { WidgetType, PanelWidget } from '@/types/panel'
+import type { WidgetType, PanelWidget, PanelLayout } from '@/types/panel'
 
 interface PanelEditorProps {
   snapshot: HardwareSnapshot | null
@@ -39,7 +41,8 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
     updateLayout, addWidget, updateWidget, removeWidget, duplicateWidget, importWidget,
     updateWidgetGeometry, updateCanvasSize,
     createPanel, deletePanel, renamePanel, setActivePanel,
-    updateCanvasBackground, updateCanvasSettings, exportPanel, importPanel,
+    updateCanvasBackground, updateCanvasSettings,
+    exportWorkspace, loadWorkspace,
     undo, canUndo,
     redo, canRedo,
   } = usePanelLayout()
@@ -55,7 +58,12 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
   const [zoom,             setZoom]              = useState(1)
   const [panX,             setPanX]              = useState(0)
   const [panY,             setPanY]              = useState(0)
-  const importInputRef    = useRef<HTMLInputElement>(null)
+  // Path of the workspace file currently associated with the editor (null = untitled).
+  // Ctrl+S writes here directly; null falls through to Save As.
+  // Persisted to localStorage so restarts reopen the same file (see mount effect below).
+  const [currentFilePath, setCurrentFilePath]   = useState<string | null>(
+    () => localStorage.getItem('xstat:workspace-file'),
+  )
   const canvasWrapperRef  = useRef<HTMLDivElement>(null)
   const zoomRef           = useRef(zoom)
   const panRef            = useRef<{ active: boolean; mx0: number; my0: number; px0: number; py0: number }>(
@@ -64,10 +72,11 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
 
   useEffect(() => { zoomRef.current = zoom }, [zoom])
 
-  // Ctrl+Z undo, Ctrl+Shift+Z / Ctrl+Y redo — bound to the latest fns so the
-  // listener is attached once and stays stable.
+  // Ctrl+Z undo, Ctrl+Shift+Z / Ctrl+Y redo, Ctrl+S save — bound to the latest
+  // fns so the listener is attached once and stays stable.
   const undoRef = useRef(undo)
   const redoRef = useRef(redo)
+  const saveRef = useRef<() => void>(() => {})
   useEffect(() => { undoRef.current = undo }, [undo])
   useEffect(() => { redoRef.current = redo }, [redo])
   useEffect(() => {
@@ -80,6 +89,9 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
       } else if ((k === 'z' && e.shiftKey) || k === 'y') {
         e.preventDefault()
         redoRef.current()
+      } else if (k === 's') {
+        e.preventDefault()
+        saveRef.current()
       }
     }
     window.addEventListener('keydown', onKey)
@@ -153,27 +165,100 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
     setCanvasSelected(true)
   }
 
-  function handleExport() {
-    const json = exportPanel()
-    const blob = new Blob([json], { type: 'application/json' })
-    const url  = URL.createObjectURL(blob)
-    const a    = document.createElement('a')
-    a.href     = url
-    a.download = `${activePanel.name.replace(/\s+/g, '_')}.xstatpanel`
-    a.click()
-    URL.revokeObjectURL(url)
+  // ── Workspace file (Open / Save / Save As) ──────────────────────────────
+  // Ctrl+S → save to the associated file, or prompt Save As when none yet.
+  // Save As always opens a native dialog and remembers the chosen path.
+  // Open accepts both the new workspace shape ({panels, activePanelId}) and
+  // legacy single-panel .xstatpanel exports (auto-wrapped into a workspace).
+  const WORKSPACE_FILE_KEY = 'xstat:workspace-file'
+
+  function persistFilePath(p: string | null) {
+    if (p) localStorage.setItem(WORKSPACE_FILE_KEY, p)
+    else localStorage.removeItem(WORKSPACE_FILE_KEY)
   }
 
-  function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = () => {
-      if (typeof reader.result === 'string') importPanel(reader.result)
+  // Parse either a full workspace or a legacy single-panel export. Returns null
+  // when the content isn't a valid panel document.
+  function parseWorkspaceContent(content: string): PanelsState | null {
+    try {
+      const parsed = JSON.parse(content)
+      if (Array.isArray(parsed.panels) && parsed.panels.length > 0) {
+        // New workspace format.
+        return { panels: parsed.panels, activePanelId: parsed.activePanelId ?? parsed.panels[0].id }
+      }
+      if (parsed.widgets && parsed.name) {
+        // Legacy single-panel .xstatpanel export — wrap it as a one-panel workspace.
+        const panel = parsed as PanelLayout
+        panel.id = panel.id || crypto.randomUUID()
+        panel.canvasWidth  = panel.canvasWidth  ?? 800
+        panel.canvasHeight = panel.canvasHeight ?? 600
+        panel.canvasShowGrid = panel.canvasShowGrid ?? true
+        return { panels: [panel], activePanelId: panel.id }
+      }
+      return null
+    } catch {
+      return null
     }
-    reader.readAsText(file)
-    e.target.value = ''
   }
+
+  async function handleSave() {
+    const content = exportWorkspace()
+    if (currentFilePath) {
+      await window.xstat.workspace.save(currentFilePath, content)
+    } else {
+      const res = await window.xstat.workspace.saveAs(content)
+      if (!res.canceled && res.filePath) {
+        setCurrentFilePath(res.filePath)
+        persistFilePath(res.filePath)
+      }
+    }
+  }
+
+  async function handleSaveAs() {
+    const res = await window.xstat.workspace.saveAs(exportWorkspace())
+    if (!res.canceled && res.filePath) {
+      setCurrentFilePath(res.filePath)
+      persistFilePath(res.filePath)
+    }
+  }
+
+  async function handleOpen() {
+    const res = await window.xstat.workspace.open()
+    if (res.canceled || !res.content) return
+    const ws = parseWorkspaceContent(res.content)
+    if (!ws) return
+    loadWorkspace(ws)
+    setCurrentFilePath(res.filePath ?? null)
+    persistFilePath(res.filePath ?? null)
+    setSelectedWidgetId(null)
+    setCanvasSelected(false)
+  }
+
+  // On startup, reopen the workspace file that was open when the app closed
+  // (path persisted in localStorage). Falls back to the localStorage snapshot
+  // when the file was moved/deleted.
+  useEffect(() => {
+    const savedPath = localStorage.getItem(WORKSPACE_FILE_KEY)
+    if (!savedPath) return
+    window.xstat.workspace.readFile(savedPath).then(res => {
+      if (!res.ok || !res.content) {
+        // File no longer exists — drop the stale association.
+        persistFilePath(null)
+        return
+      }
+      const ws = parseWorkspaceContent(res.content)
+      if (!ws) {
+        persistFilePath(null)
+        return
+      }
+      loadWorkspace(ws)
+      setCurrentFilePath(savedPath)
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Keep the Ctrl+S ref pointing at the latest handleSave (depends on currentFilePath).
+  useEffect(() => { saveRef.current = handleSave })
 
   function handleImportWidget(data: { version?: number; widget: PanelWidget }) {
     const id = importWidget(data)
@@ -417,26 +502,38 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
 
         <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
 
-        {/* Export */}
-        <Tooltip title={t('panelEditor.exportPanel')} arrow>
-          <IconButton size="small" onClick={handleExport}>
+        {/* Open workspace file */}
+        <Tooltip title={t('panelEditor.openWorkspace')} arrow>
+          <IconButton size="small" onClick={handleOpen}>
+            <FolderOpenIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+
+        {/* Save (Ctrl+S) — writes to the associated file, or prompts Save As */}
+        <Tooltip title={t('panelEditor.saveWorkspace')} arrow>
+          <IconButton size="small" onClick={handleSave}>
+            <SaveIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+
+        {/* Save As — always prompts for a new path */}
+        <Tooltip title={t('panelEditor.saveWorkspaceAs')} arrow>
+          <IconButton size="small" onClick={handleSaveAs}>
             <FileDownloadIcon fontSize="small" />
           </IconButton>
         </Tooltip>
 
-        {/* Import */}
-        <Tooltip title={t('panelEditor.importPanel')} arrow>
-          <IconButton size="small" onClick={() => importInputRef.current?.click()}>
-            <FileUploadIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
-        <input
-          ref={importInputRef}
-          type="file"
-          accept=".xstatpanel,.json"
-          style={{ display: 'none' }}
-          onChange={handleImport}
-        />
+        {/* Current file name (or "untitled") so the user knows what they're editing */}
+        <Typography
+          variant="caption"
+          sx={{
+            color: 'text.disabled', ml: 0.5, maxWidth: 200,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}
+          title={currentFilePath ?? t('panelEditor.untitled')}
+        >
+          {currentFilePath ? currentFilePath.replace(/^.*[\\/]/, '') : t('panelEditor.untitled')}
+        </Typography>
       </Box>
 
       {/* ── Body ─────────────────────────────────────────────────────── */}

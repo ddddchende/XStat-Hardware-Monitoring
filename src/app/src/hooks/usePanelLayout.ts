@@ -148,6 +148,8 @@ function makeDefaultWidget(type: WidgetType): PanelWidget {
       return { ...base, imageObjectFit: 'contain', imageOpacity: 1 }
     case 'Box':
       return { ...base, boxFill: '#0D0D10', boxBorderColor: '#252933', boxBorderWidth: 1, boxRadius: 12 }
+    case 'SystemInfo':
+      return { ...base, sysShowCpu: true, sysShowGpu: true, sysShowRamTotal: true, sysShowRamSpeed: true, sysShowOs: true, sysShowDisks: true }
   }
 }
 
@@ -175,6 +177,7 @@ export function usePanelLayout() {
     | { type: 'NAV'; activePanelId: string }
     | { type: 'UNDO' }
     | { type: 'REDO' }
+    | { type: 'LOAD'; state: PanelsState }
 
   const HISTORY_LIMIT = 100
 
@@ -209,6 +212,11 @@ export function usePanelLayout() {
           past: [...state.past, state.present].slice(-HISTORY_LIMIT),
           future: state.future.slice(1),
         }
+      }
+      case 'LOAD': {
+        // Loading a workspace from a file replaces the present state entirely
+        // and resets the undo/redo history — it's a document switch, not an edit.
+        return { present: action.state, past: [], future: [] }
       }
       default:
         return state
@@ -462,6 +470,18 @@ export function usePanelLayout() {
     }
   }
 
+  // ── Workspace file (Open / Save / Save As) ───────────────────────────────
+  // A workspace file stores the entire PanelsState (all panels + activePanelId),
+  // so opening it restores the full document. exportPanel/importPanel above
+  // remain for single-panel share; workspace methods operate on the whole doc.
+  function exportWorkspace(): string {
+    return JSON.stringify(state, null, 2)
+  }
+
+  function loadWorkspace(next: PanelsState) {
+    dispatch({ type: 'LOAD', state: next })
+  }
+
   return {
     panels: state.panels,
     activePanel,
@@ -481,6 +501,8 @@ export function usePanelLayout() {
     updateCanvasSize,
     exportPanel,
     importPanel,
+    exportWorkspace,
+    loadWorkspace,
     undo,
     canUndo,
     redo,

@@ -10,6 +10,7 @@ export type WidgetType =
   | 'Custom'
   | 'Image'
   | 'Box'
+  | 'SystemInfo'
 
 export interface PanelWidget {
   id: string
@@ -83,6 +84,19 @@ export interface PanelWidget {
   boxBorderColor?: string   // border color
   boxBorderWidth?: number   // border thickness (px)
   boxRadius?: number        // corner radius (px)
+  // SystemInfo widget — which fields to show + styling
+  sysShowCpu?: boolean
+  sysShowGpu?: boolean
+  sysShowRamTotal?: boolean
+  sysShowRamSpeed?: boolean
+  sysShowOs?: boolean
+  sysShowDisks?: boolean
+  // SystemInfo widget — style customization
+  sysShowLabels?: boolean       // show row titles (CPU/RAM/OS/…)
+  sysShowIcons?: boolean        // show row icons
+  sysIconColor?: string         // override icon color (falls back to accentColor)
+  sysDisksToShow?: string[]    // drive letters to display (empty = all)
+  sysTextAlign?: 'left' | 'center' | 'right'  // row title + value alignment
   // Layer ordering
   zIndex?: number
   // Element visibility toggles (sensor widgets)
@@ -124,4 +138,5 @@ export const WIDGET_DEFAULTS: Record<WidgetType, { w: number; h: number }> = {
   Custom:          { w: 240, h: 160 },
   Image:           { w: 200, h: 200 },
   Box:             { w: 337, h: 560 },
+  SystemInfo:      { w: 260, h: 200 },
 }

@@ -11,6 +11,7 @@ import { TextWidget }            from './widgets/TextWidget'
 import { CustomWidget }          from './widgets/CustomWidget'
 import { ImageWidget }           from './widgets/ImageWidget'
 import { BoxWidget }             from './widgets/BoxWidget'
+import { SystemInfoWidget }      from './widgets/SystemInfoWidget'
 
 interface Props {
   widget: PanelWidget
@@ -38,6 +39,8 @@ export const WidgetRenderer: React.FC<Props> = ({ widget, snapshot, history }) =
       return <ImageWidget widget={widget} />
     case 'Box':
       return <BoxWidget widget={widget} />
+    case 'SystemInfo':
+      return <SystemInfoWidget widget={widget} />
     default:
       return null
   }

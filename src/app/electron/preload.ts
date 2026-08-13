@@ -44,4 +44,18 @@ contextBridge.exposeInMainWorld('xstat', {
     },
     offInit: () => ipcRenderer.removeAllListeners('widget-editor:init'),
   },
+  workspace: {
+    /** Show a native Save dialog, write content to the chosen path. Returns canceled=true if dismissed. */
+    saveAs: (content: string): Promise<{ canceled: boolean; filePath?: string }> =>
+      ipcRenderer.invoke('workspace:saveAs', content),
+    /** Write content to an already-chosen path (Ctrl+S when a file is associated). */
+    save: (filePath: string, content: string): Promise<{ ok: boolean }> =>
+      ipcRenderer.invoke('workspace:save', filePath, content),
+    /** Show a native Open dialog and read the file. Returns canceled=true if dismissed. */
+    open: (): Promise<{ canceled: boolean; filePath?: string; content?: string }> =>
+      ipcRenderer.invoke('workspace:open'),
+    /** Read a known path without a dialog — used to auto-reopen the last workspace on startup. */
+    readFile: (filePath: string): Promise<{ ok: boolean; content?: string }> =>
+      ipcRenderer.invoke('workspace:readFile', filePath),
+  },
 })
