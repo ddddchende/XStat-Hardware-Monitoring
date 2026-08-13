@@ -44,6 +44,13 @@ export interface PanelWidget {
   // Range (Bar + Gauge)
   min?: number
   max?: number
+  // SensorBar progress bar thickness (px)
+  barThickness?: number
+  // Widget style variant:
+  //   SensorBar:       flat | rounded | segmented
+  //   SensorGauge:     arc  | full   | half
+  //   SensorSparkline: area | line   | bars
+  variant?: string
   // Clock
   clockFormat?: '12h' | '24h'
   showTime?: boolean

@@ -14,6 +14,7 @@ export const SensorBarWidget: React.FC<Props> = ({ widget, snapshot }) => {
   const min          = widget.min ?? 0
   const max          = widget.max ?? 100
   const pct          = Math.max(0, Math.min(1, (value - min) / (max - min)))
+  const variant      = widget.variant ?? 'flat'
   const accentColor      = widget.accentColor      ?? widget.color ?? '#7c6ef5'
   const color            = widget.color            ?? '#7c6ef5'
   const fontSize         = widget.fontSize         ?? 11
@@ -32,6 +33,55 @@ export const SensorBarWidget: React.FC<Props> = ({ widget, snapshot }) => {
   const showLabel = widget.showLabel ?? true
   const showValue = widget.showValue ?? true
   const showAccent = widget.showAccent ?? true
+
+  // Variant-specific default thickness
+  const defaultThickness = variant === 'rounded' ? 14 : variant === 'segmented' ? 10 : 6
+  const barThickness = widget.barThickness ?? defaultThickness
+
+  const renderBar = () => {
+    if (variant === 'segmented') {
+      const segments = 10
+      const lit = Math.round(pct * segments)
+      return (
+        <Box sx={{ display: 'flex', gap: '2px', height: barThickness, width: '100%' }}>
+          {Array.from({ length: segments }).map((_, i) => (
+            <Box
+              key={i}
+              sx={{
+                flex: 1,
+                borderRadius: 1,
+                background: i < lit && showAccent ? accentColor : 'rgba(255,255,255,0.08)',
+                transition: 'background 0.35s ease',
+              }}
+            />
+          ))}
+        </Box>
+      )
+    }
+
+    const isRounded = variant === 'rounded'
+    return (
+      <Box
+        sx={{
+          height: barThickness,
+          borderRadius: 999,
+          background: 'rgba(255,255,255,0.08)',
+          overflow: 'hidden',
+        }}
+      >
+        {showAccent && (
+          <Box
+            sx={{
+              height: '100%', width: `${pct * 100}%`,
+              background: accentColor,
+              borderRadius: isRounded ? 999 : 3,
+              transition: 'width 0.35s ease',
+            }}
+          />
+        )}
+      </Box>
+    )
+  }
 
   return (
     <Box
@@ -70,23 +120,7 @@ export const SensorBarWidget: React.FC<Props> = ({ widget, snapshot }) => {
         </Typography>
         )}
       </Box>
-      <Box
-        sx={{
-          height: 6, borderRadius: 3,
-          background: 'rgba(255,255,255,0.08)',
-          overflow: 'hidden',
-        }}
-      >
-        {showAccent && (
-          <Box
-            sx={{
-              height: '100%', width: `${pct * 100}%`,
-              background: accentColor, borderRadius: 3,
-              transition: 'width 0.35s ease',
-            }}
-          />
-        )}
-      </Box>
+      {renderBar()}
     </Box>
   )
 }

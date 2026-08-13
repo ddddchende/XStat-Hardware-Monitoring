@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react'
 import { Box, Typography } from '@mui/material'
-import { AreaChart, Area } from 'recharts'
+import { AreaChart, Area, BarChart, Bar } from 'recharts'
 import type { PanelWidget } from '@/types/panel'
 import type { HardwareSnapshot } from '@/types/sensors'
 import type { HistoryPoint } from '@/hooks/useSensorHistory'
@@ -14,6 +14,7 @@ interface Props {
 export const SensorSparklineWidget: React.FC<Props> = ({ widget, snapshot, history }) => {
   const sensor       = snapshot?.sensors.find(s => s.id === widget.sensorId)
   const data         = (widget.sensorId ? history.get(widget.sensorId) : null) ?? []
+  const variant      = widget.variant ?? 'area'
   const accentColor      = widget.accentColor      ?? widget.color ?? '#03dac6'
   const color            = widget.color            ?? '#03dac6'
   const fontSize         = widget.fontSize         ?? 11
@@ -48,6 +49,8 @@ export const SensorSparklineWidget: React.FC<Props> = ({ widget, snapshot, histo
     ro.observe(el)
     return () => ro.disconnect()
   }, [])
+
+  const chartMargin = { top: 2, right: 0, left: 0, bottom: 0 }
 
   return (
     <Box
@@ -93,23 +96,29 @@ export const SensorSparklineWidget: React.FC<Props> = ({ widget, snapshot, histo
       </Box>
       <Box ref={chartBoxRef} sx={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
         {chartSize && (
-          <AreaChart width={chartSize.w} height={chartSize.h} data={data} margin={{ top: 2, right: 0, left: 0, bottom: 0 }}>
-            <defs>
-              <linearGradient id={`wsg-${widget.id}`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%"  stopColor={effectiveAccent} stopOpacity={0.4} />
-                <stop offset="95%" stopColor={effectiveAccent} stopOpacity={0.02} />
-              </linearGradient>
-            </defs>
-            <Area
-              type="monotone"
-              dataKey="v"
-              stroke={effectiveAccent}
-              strokeWidth={1.5}
-              fill={`url(#wsg-${widget.id})`}
-              dot={false}
-              isAnimationActive={false}
-            />
-          </AreaChart>
+          variant === 'bars' ? (
+            <BarChart width={chartSize.w} height={chartSize.h} data={data} margin={chartMargin}>
+              <Bar dataKey="v" fill={effectiveAccent} isAnimationActive={false} />
+            </BarChart>
+          ) : (
+            <AreaChart width={chartSize.w} height={chartSize.h} data={data} margin={chartMargin}>
+              <defs>
+                <linearGradient id={`wsg-${widget.id}`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%"  stopColor={effectiveAccent} stopOpacity={0.4} />
+                  <stop offset="95%" stopColor={effectiveAccent} stopOpacity={0.02} />
+                </linearGradient>
+              </defs>
+              <Area
+                type="monotone"
+                dataKey="v"
+                stroke={effectiveAccent}
+                strokeWidth={1.5}
+                fill={variant === 'line' ? 'transparent' : `url(#wsg-${widget.id})`}
+                dot={false}
+                isAnimationActive={false}
+              />
+            </AreaChart>
+          )
         )}
       </Box>
     </Box>

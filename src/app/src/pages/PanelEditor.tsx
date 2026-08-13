@@ -23,7 +23,7 @@ import { WidgetProperties }  from '@/components/WidgetProperties'
 import { CanvasProperties }  from '@/components/CanvasProperties'
 import { PanelCanvas }       from '@/components/PanelCanvas'
 import type { HardwareSnapshot } from '@/types/sensors'
-import type { WidgetType } from '@/types/panel'
+import type { WidgetType, PanelWidget } from '@/types/panel'
 
 interface PanelEditorProps {
   snapshot: HardwareSnapshot | null
@@ -36,7 +36,7 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
   const { t } = useTranslation()
   const {
     panels, activePanel,
-    updateLayout, addWidget, updateWidget, removeWidget, duplicateWidget,
+    updateLayout, addWidget, updateWidget, removeWidget, duplicateWidget, importWidget,
     updateWidgetGeometry, updateCanvasSize,
     createPanel, deletePanel, renamePanel, setActivePanel,
     updateCanvasBackground, updateCanvasSettings, exportPanel, importPanel,
@@ -133,8 +133,8 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
   const selectedWidget = activePanel.widgets.find(w => w.id === selectedWidgetId) ?? null
 
   // ── Handlers ────────────────────────────────────────────────────────────
-  function handleAddWidget(type: WidgetType) {
-    const id = addWidget(type)
+  function handleAddWidget(type: WidgetType, overrides?: Partial<PanelWidget>) {
+    const id = addWidget(type, overrides)
     setSelectedWidgetId(id)
   }
 
@@ -173,6 +173,11 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
     }
     reader.readAsText(file)
     e.target.value = ''
+  }
+
+  function handleImportWidget(data: { version?: number; widget: PanelWidget }) {
+    const id = importWidget(data)
+    if (id) setSelectedWidgetId(id)
   }
 
   function startRename() {
@@ -447,7 +452,7 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
               py: 0.5,
             }}
           >
-            <WidgetPalette onAdd={handleAddWidget} />
+            <WidgetPalette onAdd={handleAddWidget} onImportWidget={handleImportWidget} />
           </Box>
         )}
 

@@ -310,7 +310,7 @@ export const PanelCanvas: React.FC<Props> = ({
               height: item.h,
               zIndex: widget.zIndex ?? 0,
               overflow: 'hidden',
-              cursor: isEditMode ? 'grab' : 'default',
+              cursor: 'default',
               // Selection / hover outlines
               outline: isEditMode
                 ? selected
@@ -338,7 +338,7 @@ export const PanelCanvas: React.FC<Props> = ({
                 sx={{
                   position: 'absolute', inset: 0,
                   zIndex: 5,
-                  cursor: 'grab',
+                  cursor: 'default',
                 }}
               />
             )}

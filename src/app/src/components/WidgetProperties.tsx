@@ -11,6 +11,7 @@ import FormatAlignCenterIcon from '@mui/icons-material/FormatAlignCenter'
 import FormatAlignRightIcon  from '@mui/icons-material/FormatAlignRight'
 import DeleteOutlineIcon     from '@mui/icons-material/DeleteOutline'
 import ContentCopyIcon       from '@mui/icons-material/ContentCopy'
+import DownloadIcon          from '@mui/icons-material/Download'
 import CodeIcon              from '@mui/icons-material/Code'
 import ImageIcon                    from '@mui/icons-material/Image'
 import KeyboardDoubleArrowUpIcon    from '@mui/icons-material/KeyboardDoubleArrowUp'
@@ -265,6 +266,25 @@ const isSensorWidget = (w: PanelWidget) =>
 const hasRange = (w: PanelWidget) =>
   w.type === 'SensorBar' || w.type === 'SensorGauge'
 
+// Style variants per sensor widget type (shown as a segmented control in the panel)
+const VARIANT_OPTIONS: Record<string, { value: string; labelKey: string }[]> = {
+  SensorBar: [
+    { value: 'flat',      labelKey: 'widgetProperties.variantBarFlat' },
+    { value: 'rounded',   labelKey: 'widgetProperties.variantBarRounded' },
+    { value: 'segmented', labelKey: 'widgetProperties.variantBarSegmented' },
+  ],
+  SensorGauge: [
+    { value: 'arc',  labelKey: 'widgetProperties.variantGaugeArc' },
+    { value: 'full', labelKey: 'widgetProperties.variantGaugeFull' },
+    { value: 'half', labelKey: 'widgetProperties.variantGaugeHalf' },
+  ],
+  SensorSparkline: [
+    { value: 'area', labelKey: 'widgetProperties.variantSparkArea' },
+    { value: 'line', labelKey: 'widgetProperties.variantSparkLine' },
+    { value: 'bars', labelKey: 'widgetProperties.variantSparkBars' },
+  ],
+}
+
 export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, allWidgets, onUpdate, onGeometry, onRemove, onDuplicate }) => {
   const theme = useTheme()
   const { t } = useTranslation()
@@ -349,6 +369,26 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
               </Box>
             </Tooltip>
           )}
+          <Tooltip title={t('widgetProperties.exportWidget')} arrow>
+            <Box
+              onClick={() => {
+                const data = JSON.stringify({ version: 1, widget }, null, 2)
+                const blob = new Blob([data], { type: 'application/json' })
+                const url  = URL.createObjectURL(blob)
+                const a    = document.createElement('a')
+                a.href     = url
+                a.download = `${(widget.widgetName ?? widget.type).replace(/\s+/g, '_')}.xstatwidget`
+                a.click()
+                URL.revokeObjectURL(url)
+              }}
+              sx={{
+                p: 0.5, borderRadius: 1, cursor: 'pointer', color: 'text.secondary',
+                '&:hover': { background: alpha(theme.palette.primary.main, 0.12), color: 'primary.main' },
+              }}
+            >
+              <DownloadIcon fontSize="small" />
+            </Box>
+          </Tooltip>
           <Tooltip title={t('widgetProperties.deleteWidget')} arrow>
             <Box
               onClick={onRemove}
@@ -500,6 +540,25 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
         </Box>
       )}
 
+      {/* ── Style variant (Bar / Gauge / Sparkline) ──────────────── */}
+      {VARIANT_OPTIONS[widget.type] && (
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+          <SectionLabel>{t('widgetProperties.variant')}</SectionLabel>
+          <ToggleButtonGroup
+            size="small"
+            exclusive
+            fullWidth
+            value={widget.variant ?? VARIANT_OPTIONS[widget.type][0].value}
+            onChange={(_, v) => v && onUpdate({ variant: v })}
+            sx={{ '& .MuiToggleButton-root': { fontSize: '0.7rem', py: 0.5, textTransform: 'none' } }}
+          >
+            {VARIANT_OPTIONS[widget.type].map(opt => (
+              <ToggleButton key={opt.value} value={opt.value}>{t(opt.labelKey)}</ToggleButton>
+            ))}
+          </ToggleButtonGroup>
+        </Box>
+      )}
+
       {/* ── Range (Bar + Gauge) ──────────────────────────────────── */}
       {hasRange(widget) && (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
@@ -522,6 +581,17 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
               sx={{ flex: 1 }}
             />
           </Box>
+          {widget.type === 'SensorBar' && (
+            <TextField
+              size="small"
+              label={t('widgetProperties.barThickness')}
+              type="number"
+              inputProps={{ min: 1, max: 40, step: 1 }}
+              value={widget.barThickness ?? 6}
+              onChange={e => onUpdate({ barThickness: Math.max(1, Number(e.target.value)) })}
+              sx={{ flex: 1 }}
+            />
+          )}
         </Box>
       )}
 

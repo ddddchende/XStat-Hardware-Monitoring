@@ -162,6 +162,8 @@ public sealed class HardwareMonitor : IDisposable
             CollectHardware(subHw, sensors, doUpdate);
         }
 
+        float? memUsed = null, memAvail = null;
+
         foreach (var sensor in hw.Sensors)
         {
             // Sanitize: LHM returns NaN/Infinity for unavailable sensors; map those to null.
@@ -182,6 +184,29 @@ public sealed class HardwareMonitor : IDisposable
                 Type:         sensor.SensorType.ToString(),
                 Value:        displayValue,
                 Unit:         MapUnit(sensor.SensorType),
+                HardwareName: hw.Name
+            ));
+
+            // Track RAM Used/Available so we can synthesize Total Physical Memory below.
+            if (hw.HardwareType == HardwareType.Memory && sensor.SensorType == SensorType.Data)
+            {
+                if (sensor.Name.Contains("Used", StringComparison.OrdinalIgnoreCase)) memUsed = safeValue;
+                else if (sensor.Name.Contains("Available", StringComparison.OrdinalIgnoreCase)) memAvail = safeValue;
+            }
+        }
+
+        // LHM's RAM hardware only exposes Used + Available; synthesize Total so the UI
+        // can show physical total memory as a selectable sensor under RAM.
+        if (hw.HardwareType == HardwareType.Memory && memUsed.HasValue && memAvail.HasValue)
+        {
+            sensors.Add(new SensorReading(
+                Id:           $"{hw.HardwareType}/{hw.Identifier}/data/total"
+                                  .ToLowerInvariant().Replace(" ", "_"),
+                Name:         "Total Physical Memory",
+                Category:     MapHardwareType(hw.HardwareType),
+                Type:         "Data",
+                Value:        (float)Math.Round(memUsed.Value + memAvail.Value, 1),
+                Unit:         "GB",
                 HardwareName: hw.Name
             ));
         }

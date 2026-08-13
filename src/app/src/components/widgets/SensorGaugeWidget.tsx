@@ -28,6 +28,7 @@ export const SensorGaugeWidget: React.FC<Props> = ({ widget, snapshot }) => {
   const min          = widget.min ?? 0
   const max          = widget.max ?? 100
   const pct          = Math.max(0, Math.min(1, (value - min) / (max - min)))
+  const variant      = widget.variant ?? 'arc'
   const accentColor      = widget.accentColor      ?? widget.color ?? '#7c6ef5'
   const color            = widget.color            ?? '#7c6ef5'
   const fontSize         = widget.fontSize         ?? 16
@@ -52,10 +53,18 @@ export const SensorGaugeWidget: React.FC<Props> = ({ widget, snapshot }) => {
   const showUnit         = widget.showUnit  ?? true
   const showAccent       = widget.showAccent ?? true
 
-  // Arc: 135° → 405° (270° sweep), centre slightly below mid for text
-  const cx = 50, cy = 54, r = 34, sw = 7
-  const startAngle = 135
-  const valueAngle = startAngle + pct * 270
+  // Geometry per variant
+  const r = 34, sw = 7
+  let cx = 50, cy = 54
+  let startAngle = 135, sweep = 270
+  if (variant === 'full') {
+    cx = 50; cy = 50
+  } else if (variant === 'half') {
+    cx = 50; cy = 62; startAngle = 270; sweep = 180
+  }
+  const valueAngle = startAngle + pct * sweep
+  const circumference = 2 * Math.PI * r
+  const dashOffset = circumference * (1 - pct)
 
   return (
     <Box
@@ -74,25 +83,43 @@ export const SensorGaugeWidget: React.FC<Props> = ({ widget, snapshot }) => {
       >
         <svg
           viewBox="0 0 100 100"
-          style={{ width: '100%', height: '100%', maxWidth: 160, maxHeight: 160 }}
+          preserveAspectRatio="xMidYMid meet"
+          style={{ width: '100%', height: '100%' }}
         >
-          {/* Track */}
-          <path
-            d={arcPath(cx, cy, r, startAngle, startAngle + 270)}
-            fill="none"
-            stroke="rgba(255,255,255,0.08)"
-            strokeWidth={sw}
-            strokeLinecap="round"
-          />
-          {/* Value fill */}
-          {showAccent && pct > 0.005 && (
-            <path
-              d={arcPath(cx, cy, r, startAngle, valueAngle)}
-              fill="none"
-              stroke={accentColor}
-              strokeWidth={sw}
-              strokeLinecap="round"
-            />
+          {variant === 'full' ? (
+            <>
+              <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth={sw} />
+              {showAccent && pct > 0.005 && (
+                <circle
+                  cx={cx} cy={cy} r={r} fill="none" stroke={accentColor} strokeWidth={sw} strokeLinecap="round"
+                  strokeDasharray={circumference} strokeDashoffset={dashOffset}
+                  transform={`rotate(-90 ${cx} ${cy})`}
+                  style={{ transition: 'stroke-dashoffset 0.35s ease' }}
+                />
+              )}
+            </>
+          ) : (
+            <>
+              {/* Track */}
+              <path
+                d={arcPath(cx, cy, r, startAngle, startAngle + sweep)}
+                fill="none"
+                stroke="rgba(255,255,255,0.08)"
+                strokeWidth={sw}
+                strokeLinecap="round"
+              />
+              {/* Value fill */}
+              {showAccent && pct > 0.005 && (
+                <path
+                  d={arcPath(cx, cy, r, startAngle, valueAngle)}
+                  fill="none"
+                  stroke={accentColor}
+                  strokeWidth={sw}
+                  strokeLinecap="round"
+                  style={{ transition: 'all 0.35s ease' }}
+                />
+              )}
+            </>
           )}
           {/* Value label */}
           {showValue && (
@@ -107,15 +134,15 @@ export const SensorGaugeWidget: React.FC<Props> = ({ widget, snapshot }) => {
           </text>
           )}
           {showUnit && displayUnit && (
-            <text
-              x={cx} y={cy + 11}
-              textAnchor="middle" dominantBaseline="middle"
-              fill={unitColor} fontSize={unitFontSize} fontWeight={unitBold ? 'bold' : 'normal'}
-              fontStyle={unitItalic ? 'italic' : 'normal'}
-              fontFamily={unitFontFamily ?? 'Inter, system-ui, sans-serif'}
-            >
-              {displayUnit}
-            </text>
+          <text
+            x={cx} y={cy + 11}
+            textAnchor="middle" dominantBaseline="middle"
+            fill={unitColor} fontSize={unitFontSize} fontWeight={unitBold ? 'bold' : 'normal'}
+            fontStyle={unitItalic ? 'italic' : 'normal'}
+            fontFamily={unitFontFamily ?? 'Inter, system-ui, sans-serif'}
+          >
+            {displayUnit}
+          </text>
           )}
         </svg>
       </Box>

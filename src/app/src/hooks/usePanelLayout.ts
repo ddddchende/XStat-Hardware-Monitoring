@@ -131,11 +131,13 @@ function makeDefaultWidget(type: WidgetType): PanelWidget {
   const base: PanelWidget = { id: crypto.randomUUID(), type }
   switch (type) {
     case 'SensorBar':
+      return { ...base, min: 0, max: 100, color: '#7c6ef5', variant: 'flat' }
     case 'SensorGauge':
-      return { ...base, min: 0, max: 100, color: '#7c6ef5' }
+      return { ...base, min: 0, max: 100, color: '#7c6ef5', variant: 'arc' }
     case 'SensorValue':
-    case 'SensorSparkline':
       return { ...base, color: '#03dac6' }
+    case 'SensorSparkline':
+      return { ...base, color: '#03dac6', variant: 'area' }
     case 'Clock':
       return { ...base, color: '#ffffff', clockFormat: '24h', showDate: false, showSeconds: true }
     case 'Text':
@@ -255,8 +257,8 @@ export function usePanelLayout() {
   }
 
   // ── Widgets ───────────────────────────────────────────────────────────────
-  function addWidget(type: WidgetType): string {
-    const widget = makeDefaultWidget(type)
+  function addWidget(type: WidgetType, overrides?: Partial<PanelWidget>): string {
+    const widget = overrides ? { ...makeDefaultWidget(type), ...overrides } : makeDefaultWidget(type)
     const { w, h } = WIDGET_DEFAULTS[type]
     // Stagger new widgets so they don't all pile on top of each other
     const n = activePanel.layout.length
@@ -333,6 +335,34 @@ export function usePanelLayout() {
               widgets: [...p.widgets, clonedWidget],
               layout: [...p.layout, clonedLayout],
             }
+          : p
+      ),
+    }))
+    return newId
+  }
+
+  // Import a widget previously exported as .xstatwidget. Generates a fresh UUID and a
+  // default layout position so it lands cleanly in the current panel.
+  function importWidget(data: { version?: number; widget: PanelWidget }): string | null {
+    const src = data.widget
+    if (!src || !src.type) return null
+    const newId = crypto.randomUUID()
+    const widget: PanelWidget = {
+      ...src,
+      id: newId,
+      type: src.type,
+      ...(src.customFiles ? { customFiles: { ...src.customFiles } } : {}),
+    }
+    const def = WIDGET_DEFAULTS[src.type]
+    const { w, h } = def ?? { w: 6, h: 4 }
+    const n = activePanel.layout.length
+    const item: LayoutItem = { i: newId, x: 10 + (n % 8) * 20, y: 10 + (n % 8) * 20, w, h }
+
+    commit(s => ({
+      ...s,
+      panels: s.panels.map(p =>
+        p.id === activePanel.id
+          ? { ...p, widgets: [...p.widgets, widget], layout: [...p.layout, item] }
           : p
       ),
     }))
@@ -438,6 +468,7 @@ export function usePanelLayout() {
     updateWidget,
     removeWidget,
     duplicateWidget,
+    importWidget,
     updateWidgetGeometry,
     createPanel,
     deletePanel,
