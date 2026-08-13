@@ -147,3 +147,98 @@ layout();
 - `console.log(sensors)` 在 DevTools iframe 上下文查看实时数据
 - 列出所有传感器：`console.log(sensors.map(s=>s.id+'  '+s.name).join('\n'))`
 - 属性面板「传感器列表」按钮可浏览并复制名称
+
+## 8. 传感器名称速查表（给 AI 画组件用）
+
+> 传感器用 `name` 查找。**通用传感器名称（CPU Total / CPU Package / Core Max / GPU Core / Memory 等）跨机器稳定**，可直接写死在组件里；硬件特定名称（P-Core #N、盘名、网卡名）按当前机器实测为准。同一类传感器（多核/多盘/多网卡）的 `name` 会重复，此时改用 `id`（唯一路径）或 `category + type + hardwareName` 组合查找。
+>
+> 组件里用 `category`（CPU/GPU/RAM/Storage/Network/…）+ `type`（Load/Temperature/Clock/Power/Voltage/Data/Throughput/…）判断传感器种类。常用查找写法见第 2 节。
+
+### CPU（i7-12700K 实测，通用名称跨 Intel CPU 稳定）
+
+| name | type | unit |
+|---|---|---|
+| CPU Total | Load | % |
+| CPU Core Max | Load | % |
+| CPU Core #N Thread #1 / #2 | Load | % |
+| CPU Package | Temperature | °C |
+| Core Max | Temperature | °C |
+| Core Average | Temperature | °C |
+| P-Core #N | Temperature | °C |
+| P-Core #N Distance to TjMax | Temperature | °C |
+| P-Core #N | Clock | MHz |
+| Bus Speed | Clock | MHz |
+| CPU Package | Power | W |
+| CPU Cores / CPU Memory / CPU Platform | Power | W |
+| CPU Core | Voltage | V |
+| P-Core #N | Voltage | V |
+
+### GPU（RTX 3080 实测，NVIDIA 通用）
+
+| name | type | unit |
+|---|---|---|
+| GPU Core | Temperature | °C |
+| GPU Hot Spot | Temperature | °C |
+| GPU Memory Junction | Temperature | °C |
+| GPU Core | Clock | MHz |
+| GPU Memory | Clock | MHz |
+| GPU Core | Load | % |
+| GPU Memory Controller / GPU Video Engine / GPU Bus / GPU Power / GPU Board Power | Load | % |
+| GPU Fan 1 / GPU Fan 2 | Fan | RPM |
+| GPU Fan 1 / GPU Fan 2 | Control | % |
+| GPU Core Voltage | Voltage | V |
+| GPU Package | Power | W |
+| GPU Memory Total / Free / Used | SmallData | MB |
+| D3D Dedicated Memory Used / D3D Shared Memory Used | SmallData | MB |
+| D3D 3D / D3D Compute_0 / D3D Compute_1 / D3D Cuda / D3D VR / D3D Video Decode / D3D Video Encode / D3D Copy / D3D Overlay / D3D Graphics_1 / D3D Security / D3D Optical Flow Accelerator 0 | Load | % |
+| GPU PCIe Rx / GPU PCIe Tx | Throughput | Mbps |
+
+### RAM / 内存
+
+| name | type | unit | 说明 |
+|---|---|---|---|
+| Memory Used | Data | GB | 「Total Memory」控制器（物理内存） |
+| Memory Available | Data | GB | 同上 |
+| Memory | Load | % | 同上 |
+| Total Physical Memory | Data | GB | 同上（合成，= Used + Available） |
+| Memory Used / Memory Available / Memory / Total Physical Memory | Data/Load | GB/% | 「Virtual Memory」控制器（虚拟内存） |
+| Capacity | Data | GB | 每条内存条 |
+| tCKAVGmin / tCKAVGmax / tAA / tRCD / tRP / tRAS / tRC / tRFC1 / tRFC2 / tRFC4 / tFAW / tRRD_S / tRRD_L / tCCD_L / tWR / tWTR_S / tWTR_L | Timing | — | 内存时序（每条内存条） |
+
+### Motherboard / 主板（Nuvoton NCT6798D 实测，型号随主板不同）
+
+| name | type | unit |
+|---|---|---|
+| Fan #1 ~ Fan #7 | Control | % |
+| Fan #1 ~ Fan #7 | Fan | RPM |
+| Vcore / AVCC / +3.3V / +3V Standby / CMOS Battery / CPU Termination | Voltage | V |
+| Voltage #2 / #5 / #6 / #7 / #11 / #13 / #14 / #15 | Voltage | V |
+| Temperature #1 / #2 / #3 / #4 / #6 | Temperature | °C |
+
+### Storage / 硬盘（每个盘一组，hardwareName 区分）
+
+| name | type | unit |
+|---|---|---|
+| Temperature / Warning Temperature / Critical Temperature | Temperature | °C |
+| Life | Level | % |
+| Used Space | Load | % |
+| Read Activity / Write Activity / Total Activity | Load | % |
+| Free Space / Total Space / Data Read / Data Written | Data | GB |
+| Read Rate / Write Rate | Throughput | Mbps |
+| Power On Count | Factor | × |
+| Power On Hours | Factor | × |
+
+### Network / 网络（每个网卡一组，hardwareName 区分，如 以太网 / WLAN）
+
+| name | type | unit |
+|---|---|---|
+| Upload Speed / Download Speed | Throughput | Mbps |
+| Network Utilization | Load | % |
+| Data Uploaded / Data Downloaded | Data | GB |
+
+### 查找要点
+
+- `value` 可能为 `null`（传感器暂时不可用），渲染前务必判空：`s.value != null ? … : '--'`
+- `unit` 已含单位符号（`°C` / `%` / `MHz` / `GB` / `W` / `V` / `RPM` / `Mbps` / `×`），直接显示即可
+- 百分比类（Load）合理范围 0–100，可直接做进度条/仪表；温度/频率/功率按需设 max
+- 实时数据在 `/api/sensors`（JSON）可人工核对当前机器实际有哪些传感器

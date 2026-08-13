@@ -10,6 +10,7 @@ import { ClockWidget }           from './widgets/ClockWidget'
 import { TextWidget }            from './widgets/TextWidget'
 import { CustomWidget }          from './widgets/CustomWidget'
 import { ImageWidget }           from './widgets/ImageWidget'
+import { BoxWidget }             from './widgets/BoxWidget'
 
 interface Props {
   widget: PanelWidget
@@ -35,6 +36,8 @@ export const WidgetRenderer: React.FC<Props> = ({ widget, snapshot, history }) =
       return <CustomWidget widget={widget} snapshot={snapshot} />
     case 'Image':
       return <ImageWidget widget={widget} />
+    case 'Box':
+      return <BoxWidget widget={widget} />
     default:
       return null
   }

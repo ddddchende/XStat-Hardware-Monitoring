@@ -146,6 +146,8 @@ function makeDefaultWidget(type: WidgetType): PanelWidget {
       return { ...base, customHtml: CUSTOM_DEFAULT_HTML }
     case 'Image':
       return { ...base, imageObjectFit: 'contain', imageOpacity: 1 }
+    case 'Box':
+      return { ...base, boxFill: '#0D0D10', boxBorderColor: '#252933', boxBorderWidth: 1, boxRadius: 12 }
   }
 }
 

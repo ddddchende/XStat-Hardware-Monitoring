@@ -980,6 +980,57 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
           </Box>
         </Box>
       )}
+
+      {/* ── Box (rectangle frame) widget ─────────────────────────── */}
+      {widget.type === 'Box' && (
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+          <SectionLabel>{t('widgetProperties.box')}</SectionLabel>
+
+          {/* Fill color */}
+          <Box>
+            <SectionLabel>{t('widgetProperties.boxFill')}</SectionLabel>
+            <ColorSwatchesPicker value={widget.boxFill ?? '#0D0D10'} onChange={c => onUpdate({ boxFill: c })} />
+          </Box>
+
+          {/* Border color */}
+          <Box>
+            <SectionLabel>{t('widgetProperties.boxBorderColor')}</SectionLabel>
+            <ColorSwatchesPicker value={widget.boxBorderColor ?? '#252933'} onChange={c => onUpdate({ boxBorderColor: c })} />
+          </Box>
+
+          {/* Border thickness */}
+          <Box>
+            <SectionLabel>{t('widgetProperties.boxBorderWidth', { px: widget.boxBorderWidth ?? 1 })}</SectionLabel>
+            <Box
+              component="input"
+              type="range"
+              min={0}
+              max={20}
+              value={widget.boxBorderWidth ?? 1}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                onUpdate({ boxBorderWidth: Number(e.target.value) })
+              }
+              sx={{ width: '100%', accentColor: 'primary.main', cursor: 'pointer' }}
+            />
+          </Box>
+
+          {/* Corner radius */}
+          <Box>
+            <SectionLabel>{t('widgetProperties.boxRadius', { px: widget.boxRadius ?? 12 })}</SectionLabel>
+            <Box
+              component="input"
+              type="range"
+              min={0}
+              max={100}
+              value={widget.boxRadius ?? 12}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                onUpdate({ boxRadius: Number(e.target.value) })
+              }
+              sx={{ width: '100%', accentColor: 'primary.main', cursor: 'pointer' }}
+            />
+          </Box>
+        </Box>
+      )}
     </Box>
   )
 }

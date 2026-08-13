@@ -9,6 +9,7 @@ export type WidgetType =
   | 'Text'
   | 'Custom'
   | 'Image'
+  | 'Box'
 
 export interface PanelWidget {
   id: string
@@ -77,6 +78,11 @@ export interface PanelWidget {
   imageDataUrl?: string
   imageObjectFit?: 'contain' | 'cover' | 'fill' | 'none'
   imageOpacity?: number
+  // Box (rectangle frame) widget
+  boxFill?: string          // background color
+  boxBorderColor?: string   // border color
+  boxBorderWidth?: number   // border thickness (px)
+  boxRadius?: number        // corner radius (px)
   // Layer ordering
   zIndex?: number
   // Element visibility toggles (sensor widgets)
@@ -117,4 +123,5 @@ export const WIDGET_DEFAULTS: Record<WidgetType, { w: number; h: number }> = {
   Text:            { w: 180, h: 36  },
   Custom:          { w: 240, h: 160 },
   Image:           { w: 200, h: 200 },
+  Box:             { w: 337, h: 560 },
 }
