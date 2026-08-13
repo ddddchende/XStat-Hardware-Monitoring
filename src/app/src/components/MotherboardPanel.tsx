@@ -1,5 +1,6 @@
 import React from 'react'
 import { Box, Typography, Card, CardContent, useTheme } from '@mui/material'
+import { useTranslation } from 'react-i18next'
 import CircuitBoardIcon from '@mui/icons-material/DeveloperBoard'
 import { GaugeBar, StatTile } from '@/components/Primitives'
 import { filterSensors } from '@/hooks/useSensorHistory'
@@ -11,6 +12,7 @@ interface MotherboardPanelProps {
 
 export const MotherboardPanel: React.FC<MotherboardPanelProps> = ({ sensors }) => {
   const theme = useTheme()
+  const { t } = useTranslation()
   // Combine Motherboard + EC + SuperIO sensors
   const mbSensors = sensors.filter(s =>
     s.category === 'Motherboard' || s.category === 'EC'
@@ -32,13 +34,13 @@ export const MotherboardPanel: React.FC<MotherboardPanelProps> = ({ sensors }) =
       <CardContent sx={{ pb: '12px !important' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
           <Box sx={{ color: accent, display: 'flex' }}><CircuitBoardIcon /></Box>
-          <Typography variant="h6" sx={{ fontWeight: 700 }}>Motherboard</Typography>
+          <Typography variant="h6" sx={{ fontWeight: 700 }}>{t('hardware.motherboard')}</Typography>
         </Box>
 
         {temps.length > 0 && (
           <>
             <Typography variant="overline" color="text.secondary" sx={{ fontSize: '0.65rem', mb: 1, display: 'block' }}>
-              Temperatures
+              {t('hardware.temperatures')}
             </Typography>
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 1.5 }}>
               {temps.slice(0, 8).map(s => {
@@ -54,7 +56,7 @@ export const MotherboardPanel: React.FC<MotherboardPanelProps> = ({ sensors }) =
         {fans.length > 0 && (
           <>
             <Typography variant="overline" color="text.secondary" sx={{ fontSize: '0.65rem', mb: 1, display: 'block' }}>
-              Fans
+              {t('hardware.fans')}
             </Typography>
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75, mb: 1.5 }}>
               {fans.map(s => (
@@ -75,7 +77,7 @@ export const MotherboardPanel: React.FC<MotherboardPanelProps> = ({ sensors }) =
         {voltages.length > 0 && (
           <>
             <Typography variant="overline" color="text.secondary" sx={{ fontSize: '0.65rem', mb: 1, display: 'block' }}>
-              Voltages
+              {t('hardware.voltages')}
             </Typography>
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
               {voltages.slice(0, 8).map(s => (

@@ -2,6 +2,7 @@ import React from 'react'
 import {
   Box, Typography, Card, CardContent, Divider, useTheme, Chip
 } from '@mui/material'
+import { useTranslation } from 'react-i18next'
 import RouterIcon    from '@mui/icons-material/Router'
 import WifiIcon      from '@mui/icons-material/Wifi'
 import BluetoothIcon from '@mui/icons-material/Bluetooth'
@@ -45,6 +46,7 @@ function fmtSpeed(value: number | null | undefined, unit: string): string {
 
 export const NetworkPanel: React.FC<NetworkPanelProps> = ({ sensors, history }) => {
   const theme = useTheme()
+  const { t } = useTranslation()
   const netSensors = sensors.filter(s => s.category === 'Network')
   if (netSensors.length === 0) return null
 
@@ -71,7 +73,7 @@ export const NetworkPanel: React.FC<NetworkPanelProps> = ({ sensors, history }) 
       <CardContent sx={{ pb: '12px !important' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
           <Box sx={{ color: ulColor, display: 'flex' }}><RouterIcon /></Box>
-          <Typography variant="h6" sx={{ fontWeight: 700 }}>Network</Typography>
+          <Typography variant="h6" sx={{ fontWeight: 700 }}>{t('hardware.network')}</Typography>
         </Box>
 
         {sorted.map(([ifName, ifSensors], idx) => {
@@ -100,7 +102,7 @@ export const NetworkPanel: React.FC<NetworkPanelProps> = ({ sensors, history }) 
                   {ifName}
                 </Typography>
                 <Chip
-                  label={type.toUpperCase()}
+                  label={type === 'wifi' ? t('hardware.nicWifi') : type === 'bluetooth' ? t('hardware.nicBluetooth') : t('hardware.nicEthernet')}
                   size="small"
                   sx={{
                     height: 16, fontSize: '0.6rem', fontWeight: 700,

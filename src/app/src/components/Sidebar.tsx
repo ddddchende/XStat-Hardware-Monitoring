@@ -1,6 +1,7 @@
 import React from 'react'
 import { Box, Tooltip, alpha, useTheme } from '@mui/material'
 import { NavLink } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import DashboardIcon from '@mui/icons-material/Dashboard'
 import SettingsIcon from '@mui/icons-material/Settings'
 import TvIcon from '@mui/icons-material/Tv'
@@ -8,17 +9,18 @@ import TvIcon from '@mui/icons-material/Tv'
 interface NavItem {
   path: string
   icon: React.ReactNode
-  label: string
+  labelKey: string
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { path: '/',       icon: <DashboardIcon />, label: 'Dashboard' },
-  { path: '/panel',  icon: <TvIcon />,        label: 'Panel Editor' },
-  { path: '/settings', icon: <SettingsIcon />, label: 'Settings' },
+  { path: '/',       icon: <DashboardIcon />, labelKey: 'nav.dashboard' },
+  { path: '/panel',  icon: <TvIcon />,        labelKey: 'nav.panelEditor' },
+  { path: '/settings', icon: <SettingsIcon />, labelKey: 'nav.settings' },
 ]
 
 export const Sidebar: React.FC = () => {
   const theme = useTheme()
+  const { t } = useTranslation()
 
   return (
     <Box
@@ -35,8 +37,8 @@ export const Sidebar: React.FC = () => {
         flexShrink: 0,
       }}
     >
-      {NAV_ITEMS.map(({ path, icon, label }) => (
-        <Tooltip key={path} title={label} placement="right" arrow>
+      {NAV_ITEMS.map(({ path, icon, labelKey }) => (
+        <Tooltip key={path} title={t(labelKey)} placement="right" arrow>
           <Box
             component={NavLink}
             to={path}

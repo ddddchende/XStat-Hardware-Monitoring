@@ -139,7 +139,7 @@ function makeDefaultWidget(type: WidgetType): PanelWidget {
     case 'Clock':
       return { ...base, color: '#ffffff', clockFormat: '24h', showDate: false, showSeconds: true }
     case 'Text':
-      return { ...base, color: '#ffffff', text: 'Label', textAlign: 'left', fontWeight: 'normal' }
+      return { ...base, color: '#ffffff', text: '', textAlign: 'left', fontWeight: 'normal' }
     case 'Custom':
       return { ...base, customHtml: CUSTOM_DEFAULT_HTML }
     case 'Image':

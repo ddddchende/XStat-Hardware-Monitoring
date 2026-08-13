@@ -4,6 +4,7 @@ import {
   Button, Box, Typography, IconButton, alpha,
   Popover, List, ListSubheader, ListItemButton, ListItemText, Tooltip, Chip,
 } from '@mui/material'
+import { useTranslation } from 'react-i18next'
 import CloseIcon        from '@mui/icons-material/Close'
 import PlayArrowIcon    from '@mui/icons-material/PlayArrow'
 import SensorsIcon      from '@mui/icons-material/Sensors'
@@ -96,6 +97,7 @@ function applyFiles(html: string, files: Record<string, string>): string {
 }
 
 export const CustomWidgetEditor: React.FC<Props> = ({ open, widget, snapshot, onSave, onClose, standalone }) => {
+  const { t } = useTranslation()
   const [html,        setHtml]        = useState(widget.customHtml ?? CUSTOM_DEFAULT_HTML)
   const [previewHtml, setPreviewHtml] = useState(html)
   const [files,       setFiles]       = useState<Record<string, string>>(widget.customFiles ?? {})
@@ -198,7 +200,7 @@ export const CustomWidgetEditor: React.FC<Props> = ({ open, widget, snapshot, on
         flexShrink: 0,
       }}>
         <Typography variant="subtitle1" sx={{ flex: 1, fontWeight: 700 }}>
-          Custom Widget Editor
+          {t('customEditor.title')}
         </Typography>
         <Button
           size="small"
@@ -207,7 +209,7 @@ export const CustomWidgetEditor: React.FC<Props> = ({ open, widget, snapshot, on
           onClick={e => setSensorsAnchor(e.currentTarget)}
           sx={{ textTransform: 'none', fontSize: '0.75rem', py: 0.4 }}
         >
-          Sensors
+          {t('customEditor.sensors')}
         </Button>
         <Button
           size="small"
@@ -216,7 +218,7 @@ export const CustomWidgetEditor: React.FC<Props> = ({ open, widget, snapshot, on
           onClick={e => setFilesAnchor(e.currentTarget)}
           sx={{ textTransform: 'none', fontSize: '0.75rem', py: 0.4 }}
         >
-          Files {Object.keys(files).length > 0 && `(${Object.keys(files).length})`}
+          {t('customEditor.files')} {Object.keys(files).length > 0 && `(${Object.keys(files).length})`}
         </Button>
         <Button
           size="small"
@@ -225,7 +227,7 @@ export const CustomWidgetEditor: React.FC<Props> = ({ open, widget, snapshot, on
           onClick={handleRun}
           sx={{ textTransform: 'none', fontSize: '0.75rem', py: 0.4 }}
         >
-          Run
+          {t('customEditor.run')}
         </Button>
         <IconButton size="small" onClick={onClose} sx={{ ml: 0.5 }}>
           <CloseIcon fontSize="small" />
@@ -259,17 +261,17 @@ export const CustomWidgetEditor: React.FC<Props> = ({ open, widget, snapshot, on
       >
         <Box sx={{ px: 2, pt: 1.5, pb: 0.5 }}>
           <Typography variant="caption" sx={{ color: 'text.disabled', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-            Available Sensors
+            {t('customEditor.availableSensors')}
           </Typography>
           <Typography variant="caption" sx={{ display: 'block', color: 'rgba(255,255,255,0.3)', mt: 0.25 }}>
-            Click a name to copy it to clipboard
+            {t('customEditor.clickToCopy')}
           </Typography>
         </Box>
 
         {Object.keys(sensorGroups).length === 0 ? (
           <Box sx={{ px: 2, py: 2 }}>
             <Typography variant="caption" sx={{ color: 'text.disabled' }}>
-              No sensor data yet — waiting for first snapshot.
+              {t('customEditor.noSensorData')}
             </Typography>
           </Box>
         ) : (
@@ -289,7 +291,7 @@ export const CustomWidgetEditor: React.FC<Props> = ({ open, widget, snapshot, on
                 {sensors.map(s => {
                   const copied = copiedName === s.name
                   return (
-                    <Tooltip key={s.id} title={copied ? 'Copied!' : `${s.value ?? '—'} ${s.unit}`} placement="right" arrow>
+                    <Tooltip key={s.id} title={copied ? t('customEditor.copied') : `${s.value ?? '—'} ${s.unit}`} placement="right" arrow>
                       <ListItemButton
                         dense
                         onClick={() => handleCopySensor(s.name)}
@@ -348,10 +350,10 @@ export const CustomWidgetEditor: React.FC<Props> = ({ open, widget, snapshot, on
       >
         <Box sx={{ px: 2, pt: 1.5, pb: 1 }}>
           <Typography variant="caption" sx={{ color: 'text.disabled', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-            Widget Files
+            {t('customEditor.widgetFiles')}
           </Typography>
           <Typography variant="caption" sx={{ display: 'block', color: 'rgba(255,255,255,0.3)', mt: 0.25 }}>
-            Reference files in your HTML as <code style={{ fontSize: '0.7rem', background: 'rgba(255,255,255,0.08)', padding: '1px 4px', borderRadius: 3 }}>{'./data/{filename}'}</code>
+            {t('customEditor.filesHint')} <code style={{ fontSize: '0.7rem', background: 'rgba(255,255,255,0.08)', padding: '1px 4px', borderRadius: 3 }}>{'./data/{filename}'}</code>
           </Typography>
         </Box>
 
@@ -359,7 +361,7 @@ export const CustomWidgetEditor: React.FC<Props> = ({ open, widget, snapshot, on
         {Object.keys(files).length === 0 ? (
           <Box sx={{ px: 2, py: 1.5 }}>
             <Typography variant="caption" sx={{ color: 'text.disabled' }}>
-              No files added yet — click Add Files to upload.
+              {t('customEditor.noFiles')}
             </Typography>
           </Box>
         ) : (
@@ -394,7 +396,7 @@ export const CustomWidgetEditor: React.FC<Props> = ({ open, widget, snapshot, on
                       {name}
                     </Typography>
                   </Tooltip>
-                  <Tooltip title="Remove file" arrow>
+                  <Tooltip title={t('customEditor.removeFile')} arrow>
                     <IconButton
                       size="small"
                       onClick={() => handleDeleteFile(name)}
@@ -417,7 +419,7 @@ export const CustomWidgetEditor: React.FC<Props> = ({ open, widget, snapshot, on
             onClick={() => fileInputRef.current?.click()}
             sx={{ textTransform: 'none', fontSize: '0.75rem', py: 0.4 }}
           >
-            Add Files
+            {t('customEditor.addFiles')}
           </Button>
         </Box>
       </Popover>
@@ -429,7 +431,7 @@ export const CustomWidgetEditor: React.FC<Props> = ({ open, widget, snapshot, on
         <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', borderRight: '1px solid rgba(255,255,255,0.07)' }}>
           <Box sx={{ px: 2, py: 0.6, borderBottom: '1px solid rgba(255,255,255,0.05)', flexShrink: 0 }}>
             <Typography variant="caption" sx={{ color: 'text.disabled', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-              HTML / CSS / JS
+              {t('customEditor.htmlCssJs')}
             </Typography>
           </Box>
           <Box sx={{ flex: 1, overflow: 'hidden' }}>
@@ -457,10 +459,10 @@ export const CustomWidgetEditor: React.FC<Props> = ({ open, widget, snapshot, on
         <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
           <Box sx={{ px: 2, py: 0.6, borderBottom: '1px solid rgba(255,255,255,0.05)', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 1 }}>
             <Typography variant="caption" sx={{ color: 'text.disabled', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', flex: 1 }}>
-              Live Preview
+              {t('customEditor.livePreview')}
             </Typography>
             <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.25)', fontSize: '0.65rem' }}>
-              auto-updates · 450 ms debounce
+              {t('customEditor.autoUpdates')}
             </Typography>
           </Box>
           <Box sx={{ flex: 1, background: '#0d0d10', position: 'relative', overflow: 'hidden' }}>
@@ -491,7 +493,7 @@ export const CustomWidgetEditor: React.FC<Props> = ({ open, widget, snapshot, on
           </Typography>
         </Box>
         <Button onClick={onClose} size="small" sx={{ color: 'text.secondary', textTransform: 'none' }}>
-          Close
+          {t('common.close')}
         </Button>
         <Button
           onClick={handleSave}
@@ -500,7 +502,7 @@ export const CustomWidgetEditor: React.FC<Props> = ({ open, widget, snapshot, on
           color={saved ? 'success' : 'primary'}
           sx={{ textTransform: 'none', minWidth: 72, transition: 'background-color 0.2s' }}
         >
-          {saved ? 'Saved ✓' : 'Save'}
+          {saved ? t('customEditor.saved') : t('common.save')}
         </Button>
       </DialogActions>
     </Dialog>

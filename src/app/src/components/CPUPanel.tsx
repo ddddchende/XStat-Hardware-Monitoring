@@ -1,5 +1,6 @@
 import React from 'react'
 import { Box, Typography, Card, CardContent, Divider, alpha, useTheme } from '@mui/material'
+import { useTranslation } from 'react-i18next'
 import MemoryIcon from '@mui/icons-material/Memory'
 import { GaugeBar, Sparkline, StatTile } from '@/components/Primitives'
 import { filterSensors, findSensor } from '@/hooks/useSensorHistory'
@@ -13,6 +14,7 @@ interface CPUPanelProps {
 
 export const CPUPanel: React.FC<CPUPanelProps> = ({ sensors, history }) => {
   const theme = useTheme()
+  const { t } = useTranslation()
 
   // Key stats
   const totalLoad   = findSensor(sensors, 'CPU', 'Load', 'CPU Total')
@@ -49,7 +51,7 @@ export const CPUPanel: React.FC<CPUPanelProps> = ({ sensors, history }) => {
           <Box sx={{ color: accent, display: 'flex' }}>
             <MemoryIcon />
           </Box>
-          <Typography variant="h6" sx={{ fontWeight: 700, flex: 1 }}>CPU</Typography>
+          <Typography variant="h6" sx={{ fontWeight: 700, flex: 1 }}>{t('hardware.cpu')}</Typography>
           {pkgTemp && (
             <Typography variant="body2" sx={{
               color: (pkgTemp.value ?? 0) >= 90 ? 'error.main'
@@ -64,29 +66,29 @@ export const CPUPanel: React.FC<CPUPanelProps> = ({ sensors, history }) => {
 
         {/* Key stat tiles */}
         <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 2 }}>
-          <StatTile label="Load"  value={totalLoad?.value ?? null}  unit="%" color={accent} />
-          <StatTile label="Temp"  value={pkgTemp?.value ?? null}    unit="°C"
+          <StatTile label={t('hardware.load')}  value={totalLoad?.value ?? null}  unit="%" color={accent} />
+          <StatTile label={t('hardware.temp')}  value={pkgTemp?.value ?? null}    unit="°C"
             color={
               (pkgTemp?.value ?? 0) >= 90 ? theme.palette.error.main :
               (pkgTemp?.value ?? 0) >= 70 ? theme.palette.warning.main :
               theme.palette.success.main
             }
           />
-          <StatTile label="Power" value={pkgPower?.value ?? null}   unit="W"  color={theme.palette.warning.main} />
-          <StatTile label="Clock" value={maxClock ? (maxClock.value ?? null) : null} unit="MHz" color={theme.palette.secondary.main} />
+          <StatTile label={t('hardware.power')} value={pkgPower?.value ?? null}   unit="W"  color={theme.palette.warning.main} />
+          <StatTile label={t('hardware.clock')} value={maxClock ? (maxClock.value ?? null) : null} unit="MHz" color={theme.palette.secondary.main} />
         </Box>
 
         {/* Sparklines */}
         <Box sx={{ display: 'flex', gap: 1.5, mb: 2 }}>
           <Box sx={{ flex: 1 }}>
             <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.68rem', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-              Load (60s)
+              {t('hardware.load60s')}
             </Typography>
             <Sparkline data={totalLoadHistory} color={accent} height={44} unit="%" />
           </Box>
           <Box sx={{ flex: 1 }}>
             <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.68rem', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-              Temp (60s)
+              {t('hardware.temp60s')}
             </Typography>
             <Sparkline data={pkgTempHistory} color={theme.palette.success.main} height={44} unit="°C" />
           </Box>
@@ -97,7 +99,7 @@ export const CPUPanel: React.FC<CPUPanelProps> = ({ sensors, history }) => {
           <>
             <Divider sx={{ mb: 1.5, opacity: 0.4 }} />
             <Typography variant="overline" color="text.secondary" sx={{ fontSize: '0.65rem', mb: 1, display: 'block' }}>
-              Per-Core Load
+              {t('hardware.perCoreLoad')}
             </Typography>
             <Box
               sx={{
@@ -125,7 +127,7 @@ export const CPUPanel: React.FC<CPUPanelProps> = ({ sensors, history }) => {
           <>
             <Divider sx={{ mb: 1.5, mt: 1.5, opacity: 0.4 }} />
             <Typography variant="overline" color="text.secondary" sx={{ fontSize: '0.65rem', mb: 1, display: 'block' }}>
-              Per-Core Temp
+              {t('hardware.perCoreTemp')}
             </Typography>
             <Box
               sx={{

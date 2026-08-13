@@ -1,5 +1,6 @@
-﻿import React from 'react'
+import React from 'react'
 import { Box, Typography, Chip, alpha, useTheme } from '@mui/material'
+import { useTranslation } from 'react-i18next'
 import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord'
 import { CPUPanel }         from '@/components/CPUPanel'
 import { GPUPanel }         from '@/components/GPUPanel'
@@ -18,6 +19,7 @@ interface DashboardProps {
 
 export const Dashboard: React.FC<DashboardProps> = ({ snapshot, connected, error }) => {
   const theme = useTheme()
+  const { t } = useTranslation()
   const history = useSensorHistory(snapshot)
   const sensors = snapshot?.sensors ?? []
 
@@ -26,7 +28,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ snapshot, connected, error
       {/* Header */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2.5 }}>
         <Typography variant="h4" sx={{ fontWeight: 700, flex: 1 }}>
-          Dashboard
+          {t('dashboard.title')}
         </Typography>
         <Chip
           size="small"
@@ -38,7 +40,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ snapshot, connected, error
               }}
             />
           }
-          label={connected ? `Live · ${sensors.length} sensors` : 'Disconnected'}
+          label={connected ? t('dashboard.live', { count: sensors.length }) : t('dashboard.disconnected')}
           sx={{
             background: alpha(connected ? theme.palette.success.main : theme.palette.error.main, 0.12),
             color: connected ? 'success.main' : 'error.main',

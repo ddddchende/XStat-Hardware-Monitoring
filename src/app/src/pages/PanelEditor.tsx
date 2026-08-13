@@ -3,6 +3,7 @@ import {
   Box, Typography, Divider, Tooltip, IconButton, TextField,
   Menu, MenuItem, alpha, useTheme, Chip, Button, Select, FormControl, InputLabel,
 } from '@mui/material'
+import { useTranslation } from 'react-i18next'
 import EditIcon            from '@mui/icons-material/Edit'
 import VisibilityIcon      from '@mui/icons-material/Visibility'
 import AddIcon             from '@mui/icons-material/Add'
@@ -32,6 +33,7 @@ interface PanelEditorProps {
 
 export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, error: _error }) => {
   const theme = useTheme()
+  const { t } = useTranslation()
   const {
     panels, activePanel,
     updateLayout, addWidget, updateWidget, removeWidget, duplicateWidget,
@@ -198,7 +200,7 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
         }}
       >
         {/* Edit / Preview toggle */}
-        <Tooltip title={isEditMode ? 'Switch to preview' : 'Switch to edit'} arrow>
+        <Tooltip title={isEditMode ? t('panelEditor.switchToPreview') : t('panelEditor.switchToEdit')} arrow>
           <IconButton
             size="small"
             onClick={() => { setIsEditMode(m => !m); setSelectedWidgetId(null) }}
@@ -213,7 +215,7 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
         </Tooltip>
 
         <Typography variant="caption" sx={{ color: 'text.disabled', fontWeight: 600 }}>
-          {isEditMode ? 'EDIT' : 'PREVIEW'}
+          {isEditMode ? t('panelEditor.edit') : t('panelEditor.preview')}
         </Typography>
 
         <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
@@ -260,7 +262,7 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
               sx={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', pr: 0.5 }}
             >
               <span>{p.name}</span>
-              <Tooltip title="Delete panel" arrow>
+              <Tooltip title={t('panelEditor.deletePanel')} arrow>
                 <Box
                   component="span"
                   onClick={e => {
@@ -282,13 +284,13 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
           ))}
           <Divider />
           <MenuItem
-            onClick={() => { createPanel('New Panel'); setPanelMenuAnchor(null) }}
+            onClick={() => { createPanel(t('panelEditor.newPanel')); setPanelMenuAnchor(null) }}
             sx={{ fontSize: '0.85rem', color: 'primary.main' }}
           >
-            <AddIcon fontSize="small" sx={{ mr: 1 }} /> New Panel
+            <AddIcon fontSize="small" sx={{ mr: 1 }} /> {t('panelEditor.newPanel')}
           </MenuItem>
           <MenuItem onClick={startRename} sx={{ fontSize: '0.85rem' }}>
-            <EditIcon fontSize="small" sx={{ mr: 1 }} /> Rename…
+            <EditIcon fontSize="small" sx={{ mr: 1 }} /> {t('panelEditor.rename')}
           </MenuItem>
         </Menu>
 
@@ -299,7 +301,7 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
           <>
             <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              <Typography variant="caption" sx={{ color: 'text.disabled', mr: 0.25 }}>Canvas</Typography>
+              <Typography variant="caption" sx={{ color: 'text.disabled', mr: 0.25 }}>{t('panelEditor.canvas')}</Typography>
               <TextField
                 size="small" label="W"
                 value={activePanel.canvasWidth}
@@ -317,7 +319,7 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
               />
               <Typography variant="caption" sx={{ color: 'text.disabled' }}>px</Typography>
               <Divider orientation="vertical" flexItem sx={{ mx: 0.25 }} />
-              <Tooltip title={snapToGrid ? 'Snap to grid: on' : 'Snap to grid: off'} arrow>
+              <Tooltip title={snapToGrid ? t('panelEditor.snapOn') : t('panelEditor.snapOff')} arrow>
                 <IconButton
                   size="small"
                   onClick={() => setSnapToGrid(v => !v)}
@@ -330,7 +332,7 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
                   <GridOnIcon sx={{ fontSize: 16 }} />
                 </IconButton>
               </Tooltip>
-              <Tooltip title={canUndo ? 'Undo (Ctrl+Z)' : 'Nothing to undo'} arrow>
+              <Tooltip title={canUndo ? t('panelEditor.undo') : t('panelEditor.nothingToUndo')} arrow>
                 <span>
                   <IconButton
                     size="small"
@@ -342,7 +344,7 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
                   </IconButton>
                 </span>
               </Tooltip>
-              <Tooltip title={canRedo ? 'Redo (Ctrl+Shift+Z)' : 'Nothing to redo'} arrow>
+              <Tooltip title={canRedo ? t('panelEditor.redo') : t('panelEditor.nothingToRedo')} arrow>
                 <span>
                   <IconButton
                     size="small"
@@ -363,9 +365,9 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
         {/* Widget selector dropdown */}
         {isEditMode && activePanel.widgets.length > 0 && (
           <FormControl size="small" sx={{ minWidth: 160 }} variant="outlined">
-            <InputLabel shrink sx={{ fontSize: '0.75rem' }}>Select widget</InputLabel>
+            <InputLabel shrink sx={{ fontSize: '0.75rem' }}>{t('panelEditor.selectWidget')}</InputLabel>
             <Select
-              label="Select widget"
+              label={t('panelEditor.selectWidget')}
               value={selectedWidgetId ?? ''}
               onChange={e => {
                 const id = e.target.value as string
@@ -376,7 +378,7 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
               sx={{ fontSize: '0.8rem', '& .MuiSelect-select': { py: 0.6 } }}
               MenuProps={{ slotProps: { paper: { sx: { maxHeight: 320 } } } }}
             >
-              <MenuItem value=""><em style={{ opacity: 0.5 }}>None</em></MenuItem>
+              <MenuItem value=""><em style={{ opacity: 0.5 }}>{t('common.none')}</em></MenuItem>
               {[...activePanel.widgets]
                 .sort((a, b) => (b.zIndex ?? 0) - (a.zIndex ?? 0))
                 .map(w => (
@@ -400,7 +402,7 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
         <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
         <Chip
           size="small"
-          label={connected ? `${snapshot?.sensors.length ?? 0} sensors` : 'Offline'}
+          label={connected ? t('panelEditor.sensors', { count: snapshot?.sensors.length ?? 0 }) : t('panelEditor.offline')}
           sx={{
             fontSize: '0.68rem', height: 20,
             background: alpha(connected ? theme.palette.success.main : theme.palette.error.main, 0.12),
@@ -411,14 +413,14 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
         <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
 
         {/* Export */}
-        <Tooltip title="Export panel (.xstatpanel)" arrow>
+        <Tooltip title={t('panelEditor.exportPanel')} arrow>
           <IconButton size="small" onClick={handleExport}>
             <FileDownloadIcon fontSize="small" />
           </IconButton>
         </Tooltip>
 
         {/* Import */}
-        <Tooltip title="Import panel" arrow>
+        <Tooltip title={t('panelEditor.importPanel')} arrow>
           <IconButton size="small" onClick={() => importInputRef.current?.click()}>
             <FileUploadIcon fontSize="small" />
           </IconButton>
@@ -474,7 +476,7 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
                   '&:hover': { background: alpha(theme.palette.primary.main, 0.25) },
                 }}
               >
-                {Math.round(zoom * 100)}% — reset
+                {t('panelEditor.resetZoom', { pct: Math.round(zoom * 100) })}
               </Button>
             </Box>
           )}

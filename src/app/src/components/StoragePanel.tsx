@@ -1,5 +1,6 @@
 import React from 'react'
 import { Box, Typography, Card, CardContent, Divider, useTheme } from '@mui/material'
+import { useTranslation } from 'react-i18next'
 import StorageIcon from '@mui/icons-material/Storage'
 import { GaugeBar, StatTile } from '@/components/Primitives'
 import { filterSensors } from '@/hooks/useSensorHistory'
@@ -11,6 +12,7 @@ interface StoragePanelProps {
 
 export const StoragePanel: React.FC<StoragePanelProps> = ({ sensors }) => {
   const theme = useTheme()
+  const { t } = useTranslation()
   const storeSensors = sensors.filter(s => s.category === 'Storage')
   if (storeSensors.length === 0) return null
 
@@ -28,7 +30,7 @@ export const StoragePanel: React.FC<StoragePanelProps> = ({ sensors }) => {
       <CardContent sx={{ pb: '12px !important' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
           <Box sx={{ color: accent, display: 'flex' }}><StorageIcon /></Box>
-          <Typography variant="h6" sx={{ fontWeight: 700 }}>Storage</Typography>
+          <Typography variant="h6" sx={{ fontWeight: 700 }}>{t('hardware.storage')}</Typography>
         </Box>
 
         {[...driveMap.entries()].map(([driveName, driveSensors], idx) => {
@@ -58,15 +60,15 @@ export const StoragePanel: React.FC<StoragePanelProps> = ({ sensors }) => {
               </Box>
 
               <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 1 }}>
-                {temp && <StatTile label="Temp"  value={temp.value}     unit="°C"  color={tempColor} />}
-                {readRate  && <StatTile label="Read"  value={readRate.value}  unit={readRate.unit}   color={theme.palette.success.main} />}
-                {writeRate && <StatTile label="Write" value={writeRate.value} unit={writeRate.unit}  color={accent} />}
-                {lifeLeft  && <StatTile label="Life"  value={lifeLeft.value}  unit="%"              color={theme.palette.info.main} />}
+                {temp && <StatTile label={t('hardware.temp')}  value={temp.value}     unit="°C"  color={tempColor} />}
+                {readRate  && <StatTile label={t('hardware.read')}  value={readRate.value}  unit={readRate.unit}   color={theme.palette.success.main} />}
+                {writeRate && <StatTile label={t('hardware.write')} value={writeRate.value} unit={writeRate.unit}  color={accent} />}
+                {lifeLeft  && <StatTile label={t('hardware.life')}  value={lifeLeft.value}  unit="%"              color={theme.palette.info.main} />}
               </Box>
 
               {usedSpace && (
                 <GaugeBar
-                  label="Used space"
+                  label={t('hardware.usedSpace')}
                   value={usedSpace.value}
                   unit="%"
                   color={accent}

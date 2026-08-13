@@ -1,11 +1,13 @@
 import React from 'react'
 import { Box, IconButton, Typography, alpha, useTheme } from '@mui/material'
+import { useTranslation } from 'react-i18next'
 import RemoveIcon from '@mui/icons-material/Remove'
 import CropSquareIcon from '@mui/icons-material/CropSquare'
 import CloseIcon from '@mui/icons-material/Close'
 
 export const TitleBar: React.FC = () => {
   const theme = useTheme()
+  const { t } = useTranslation()
 
   const minimize = () => window.xstat?.window.minimize()
   const maximize = () => window.xstat?.window.maximize()
@@ -36,7 +38,7 @@ export const TitleBar: React.FC = () => {
           textTransform: 'uppercase',
         }}
       >
-        XStat
+        {t('titleBar.appName')}
       </Typography>
 
       {/* Spacer */}

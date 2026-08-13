@@ -15,8 +15,8 @@ public sealed class SensorBroadcastService : BackgroundService
     private readonly IHubContext<SensorHub> _hubContext;
     private readonly ILogger<SensorBroadcastService> _logger;
 
-    // Cached last snapshot for REST clients that request /api/sensors without waiting.
-    private HardwareSnapshot? _lastSnapshot;
+    // Cached last snapshot for REST clients and the broadcaster.
+    private volatile HardwareSnapshot? _lastSnapshot;
     public HardwareSnapshot? LastSnapshot => _lastSnapshot;
 
     // Poll interval — mutable at runtime so the Settings page can change it live.
@@ -44,21 +44,68 @@ public sealed class SensorBroadcastService : BackgroundService
         _logger.LogInformation("SensorBroadcastService started. Poll interval: {Interval}ms",
             _pollIntervalMs);
 
-        while (!stoppingToken.IsCancellationRequested)
+        // Slow collector: refreshes the storage/NIC sensor cache on a background
+        // thread. A single SMART query can take ~1s per disk (5 disks = 5.6s), so
+        // this runs on its own 5s cadence and never blocks the hot path.
+        var slowTask = Task.Run(async () =>
         {
-            try
+            while (!stoppingToken.IsCancellationRequested)
             {
-                var snapshot = _monitor.GetSnapshot();
-                _lastSnapshot = snapshot;
-
-                await _hubContext.Clients.All.SendAsync("SensorSnapshot", snapshot, stoppingToken);
+                try
+                {
+                    _monitor.UpdateSlowHardware();
+                }
+                catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
+                {
+                    _logger.LogWarning(ex, "Error collecting slow hardware data.");
+                }
+                await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken).ConfigureAwait(false);
             }
-            catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
+        }, stoppingToken);
+
+        // Fast collector: refreshes CPU/GPU/RAM/motherboard on the poll interval.
+        // GetSnapshot() merges the slow-hardware cache populated above, so it stays
+        // cheap (~85ms) regardless of how many disks/NICs are present.
+        var collectTask = Task.Run(async () =>
+        {
+            while (!stoppingToken.IsCancellationRequested)
             {
-                _logger.LogWarning(ex, "Error collecting/broadcasting sensor data.");
+                try
+                {
+                    _lastSnapshot = _monitor.GetSnapshot();
+                }
+                catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
+                {
+                    _logger.LogWarning(ex, "Error collecting sensor data.");
+                }
+                await Task.Delay(_pollIntervalMs, stoppingToken).ConfigureAwait(false);
             }
+        }, stoppingToken);
 
-            await Task.Delay(_pollIntervalMs, stoppingToken).ConfigureAwait(false);
+        // Broadcaster: pushes the latest cached snapshot on the poll interval,
+        // independent of how long a collection takes.
+        try
+        {
+            while (!stoppingToken.IsCancellationRequested)
+            {
+                var snap = _lastSnapshot;
+                if (snap is not null)
+                {
+                    try
+                    {
+                        await _hubContext.Clients.All.SendAsync("SensorSnapshot", snap, stoppingToken);
+                    }
+                    catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
+                    {
+                        _logger.LogWarning(ex, "Error broadcasting sensor data.");
+                    }
+                }
+                await Task.Delay(_pollIntervalMs, stoppingToken).ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            await Task.WhenAll(slowTask, collectTask).ConfigureAwait(false);
         }
     }
 }

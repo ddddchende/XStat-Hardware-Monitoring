@@ -1,5 +1,6 @@
 import React from 'react'
 import { Box, Typography } from '@mui/material'
+import { useTranslation } from 'react-i18next'
 import ImageIcon from '@mui/icons-material/Image'
 import type { PanelWidget } from '@/types/panel'
 
@@ -8,6 +9,7 @@ interface Props {
 }
 
 export const ImageWidget: React.FC<Props> = ({ widget }) => {
+  const { t } = useTranslation()
   const { imageDataUrl, imageObjectFit = 'contain', imageOpacity = 1 } = widget
 
   if (!imageDataUrl) {
@@ -29,7 +31,7 @@ export const ImageWidget: React.FC<Props> = ({ widget }) => {
       >
         <ImageIcon sx={{ fontSize: 32 }} />
         <Typography variant="caption" sx={{ fontSize: '0.65rem' }}>
-          No image selected
+          {t('widget.noImage')}
         </Typography>
       </Box>
     )

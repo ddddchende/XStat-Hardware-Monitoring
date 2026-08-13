@@ -14,13 +14,19 @@ import {
   TextField,
   Button,
   CircularProgress,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
   alpha,
   useTheme,
 } from '@mui/material'
+import { useTranslation } from 'react-i18next'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import OpenInBrowserIcon from '@mui/icons-material/OpenInBrowser'
 import { QRCodeSVG } from 'qrcode.react'
 import { useAppSettings } from '@/hooks/useAppSettings'
+import i18n from '@/i18n'
 
 const POLL_MARKS = [
   { value: 250,  label: '250ms' },
@@ -32,6 +38,7 @@ const POLL_MARKS = [
 
 export const Settings: React.FC = () => {
   const theme = useTheme()
+  const { t } = useTranslation()
   const [panelUrl, setPanelUrl] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const { settings, setPollIntervalMs } = useAppSettings()
@@ -40,6 +47,11 @@ export const Settings: React.FC = () => {
   const [portSaved, setPortSaved] = useState(false)
   const [startMinimized, setStartMinimized] = useState(false)
   const [startWithWindows, setStartWithWindows] = useState(false)
+
+  const handleLanguageChange = (lang: string) => {
+    i18n.changeLanguage(lang)
+    try { localStorage.setItem('xstat:lang', lang) } catch { /* ignore */ }
+  }
 
   useEffect(() => {
     window.xstat?.service?.getPanelUrl?.().then(setPanelUrl)
@@ -73,15 +85,15 @@ export const Settings: React.FC = () => {
   return (
     <Box sx={{ p: 3 }}>
       <Typography variant="h4" sx={{ fontWeight: 700, mb: 3 }}>
-        Settings
+        {t('settings.title')}
       </Typography>
 
-      <Typography variant="overline" color="text.secondary">Service</Typography>
+      <Typography variant="overline" color="text.secondary">{t('settings.service')}</Typography>
       <List disablePadding sx={{ mb: 2 }}>
         <ListItem>
           <ListItemText
-            primary="Service port"
-            secondary="Range 1024–65535 — service will restart on apply"
+            primary={t('settings.servicePort')}
+            secondary={t('settings.servicePortDesc')}
           />
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <TextField
@@ -99,15 +111,15 @@ export const Settings: React.FC = () => {
               disabled={portSaving}
               sx={{ minWidth: 70, borderRadius: 1.5, fontSize: '0.72rem' }}
             >
-              {portSaving ? <CircularProgress size={14} /> : portSaved ? 'Restarted' : 'Apply'}
+              {portSaving ? <CircularProgress size={14} /> : portSaved ? t('settings.restarted') : t('settings.apply')}
             </Button>
           </Box>
         </ListItem>
         <Divider />
         <ListItem sx={{ flexDirection: 'column', alignItems: 'flex-start', py: 1.5 }}>
           <ListItemText
-            primary="Poll interval"
-            secondary="How often sensor data is read from hardware"
+            primary={t('settings.pollInterval')}
+            secondary={t('settings.pollIntervalDesc')}
             sx={{ mb: 1, width: '100%' }}
           />
           <Box sx={{ width: '100%', px: 1 }}>
@@ -128,7 +140,7 @@ export const Settings: React.FC = () => {
       </List>
 
       {/* ── LAN Web Panel ───────────────────────────────────────────── */}
-      <Typography variant="overline" color="text.secondary">LAN Web Panel</Typography>
+      <Typography variant="overline" color="text.secondary">{t('settings.lanWebPanel')}</Typography>
       <Box
         sx={{
           mt: 1,
@@ -140,7 +152,7 @@ export const Settings: React.FC = () => {
         }}
       >
         <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-          Open this URL on any phone, tablet, or PC on your network to view live sensor data.
+          {t('settings.lanDesc')}
         </Typography>
 
         {panelUrl ? (
@@ -165,12 +177,12 @@ export const Settings: React.FC = () => {
               >
                 {panelUrl}
               </Box>
-              <Tooltip title={copied ? 'Copied!' : 'Copy URL'}>
+              <Tooltip title={copied ? t('settings.copied') : t('settings.copyUrl')}>
                 <IconButton size="small" onClick={copyUrl}>
                   <ContentCopyIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
-              <Tooltip title="Open in browser">
+              <Tooltip title={t('settings.openInBrowser')}>
                 <IconButton
                   size="small"
                   onClick={() => { if (panelUrl) window.open(panelUrl, '_blank') }}
@@ -202,12 +214,12 @@ export const Settings: React.FC = () => {
           </Box>
         ) : (
           <Typography variant="body2" color="text.disabled">
-            Loading LAN address…
+            {t('settings.loadingLan')}
           </Typography>
         )}
       </Box>
 
-      <Typography variant="overline" color="text.secondary">Display</Typography>
+      <Typography variant="overline" color="text.secondary">{t('settings.display')}</Typography>
       <List disablePadding>
         <ListItem>
           <FormControlLabel
@@ -221,7 +233,7 @@ export const Settings: React.FC = () => {
                 color="primary"
               />
             }
-            label="Start minimised to tray"
+            label={t('settings.startMinimized')}
           />
         </ListItem>
         <Divider />
@@ -237,14 +249,30 @@ export const Settings: React.FC = () => {
                 color="primary"
               />
             }
-            label="Start with Windows"
+            label={t('settings.startWithWindows')}
           />
         </ListItem>
       </List>
 
+      {/* ── Language ───────────────────────────────────────────── */}
+      <Typography variant="overline" color="text.secondary">{t('settings.language')}</Typography>
+      <FormControl fullWidth size="small" sx={{ mt: 1, mb: 2 }}>
+        <InputLabel id="language-select-label">{t('settings.language')}</InputLabel>
+        <Select
+          labelId="language-select-label"
+          id="language-select"
+          value={i18n.language?.startsWith('zh') ? 'zh' : 'en'}
+          label={t('settings.language')}
+          onChange={e => handleLanguageChange(e.target.value)}
+        >
+          <MenuItem value="en">{t('settings.langEn')}</MenuItem>
+          <MenuItem value="zh">{t('settings.langZh')}</MenuItem>
+        </Select>
+      </FormControl>
+
       <Box sx={{ mt: 4 }}>
         <Typography variant="caption" color="text.disabled">
-          XStat v0.1.0 — open-source hardware monitoring
+          {t('settings.footer')}
         </Typography>
       </Box>
     </Box>

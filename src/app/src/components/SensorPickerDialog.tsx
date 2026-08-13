@@ -4,6 +4,7 @@ import {
   Button, TextField, Box, Typography, InputAdornment,
   alpha, useTheme, Divider,
 } from '@mui/material'
+import { useTranslation } from 'react-i18next'
 import SearchIcon from '@mui/icons-material/Search'
 import type { SensorReading } from '@/types/sensors'
 
@@ -19,6 +20,7 @@ const CATEGORY_ORDER = ['CPU', 'GPU', 'RAM', 'Storage', 'Network', 'Motherboard'
 
 export const SensorPickerDialog: React.FC<Props> = ({ open, sensors, selectedId, onSelect, onClose }) => {
   const theme = useTheme()
+  const { t } = useTranslation()
   const [search, setSearch] = useState('')
 
   // Reset search when dialog opens
@@ -72,10 +74,10 @@ export const SensorPickerDialog: React.FC<Props> = ({ open, sensors, selectedId,
       PaperProps={{ sx: { height: '78vh', display: 'flex', flexDirection: 'column' } }}
     >
       <DialogTitle sx={{ pb: 1, fontSize: '1rem', fontWeight: 700 }}>
-        Bind Sensor
+        {t('sensorPicker.bindSensor')}
         {sensors.length > 0 && (
           <Typography component="span" variant="caption" sx={{ ml: 1, color: 'text.disabled' }}>
-            {sensors.length} available
+            {t('sensorPicker.available', { count: sensors.length })}
           </Typography>
         )}
       </DialogTitle>
@@ -85,7 +87,7 @@ export const SensorPickerDialog: React.FC<Props> = ({ open, sensors, selectedId,
           autoFocus
           size="small"
           fullWidth
-          placeholder="Search by name, type, hardware…"
+          placeholder={t('sensorPicker.searchPlaceholder')}
           value={search}
           onChange={e => setSearch(e.target.value)}
           InputProps={{
@@ -102,7 +104,7 @@ export const SensorPickerDialog: React.FC<Props> = ({ open, sensors, selectedId,
         {filtered.length === 0 ? (
           <Box sx={{ p: 4, textAlign: 'center' }}>
             <Typography variant="body2" color="text.disabled">
-              {sensors.length === 0 ? 'Service not connected' : 'No matching sensors'}
+              {sensors.length === 0 ? t('sensorPicker.serviceNotConnected') : t('sensorPicker.noMatching')}
             </Typography>
           </Box>
         ) : (
@@ -191,10 +193,10 @@ export const SensorPickerDialog: React.FC<Props> = ({ open, sensors, selectedId,
           variant="text"
           onClick={() => { onSelect(null); onClose() }}
         >
-          Clear binding
+          {t('sensorPicker.clearBinding')}
         </Button>
         <Box sx={{ flex: 1 }} />
-        <Button size="small" onClick={onClose}>Cancel</Button>
+        <Button size="small" onClick={onClose}>{t('common.cancel')}</Button>
       </DialogActions>
     </Dialog>
   )

@@ -1,5 +1,6 @@
 import React from 'react'
 import { Box, Typography, Card, CardContent, Divider, useTheme } from '@mui/material'
+import { useTranslation } from 'react-i18next'
 import VideoSettingsIcon from '@mui/icons-material/VideoSettings'
 import { GaugeBar, Sparkline, StatTile } from '@/components/Primitives'
 import { filterSensors, findSensor } from '@/hooks/useSensorHistory'
@@ -13,6 +14,7 @@ interface GPUPanelProps {
 
 export const GPUPanel: React.FC<GPUPanelProps> = ({ sensors, history }) => {
   const theme = useTheme()
+  const { t } = useTranslation()
 
   const gpuSensors = sensors.filter(s => s.category === 'GPU')
   if (gpuSensors.length === 0) return null
@@ -61,7 +63,7 @@ export const GPUPanel: React.FC<GPUPanelProps> = ({ sensors, history }) => {
                   : theme.palette.success.main
 
   // hardware name from first GPU sensor
-  const hwName = gpuSensors[0]?.hardwareName ?? 'GPU'
+  const hwName = gpuSensors[0]?.hardwareName ?? t('hardware.gpu')
 
   return (
     <Card>
@@ -72,7 +74,7 @@ export const GPUPanel: React.FC<GPUPanelProps> = ({ sensors, history }) => {
             <VideoSettingsIcon />
           </Box>
           <Box sx={{ flex: 1, overflow: 'hidden' }}>
-            <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1 }}>GPU</Typography>
+            <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1 }}>{t('hardware.gpu')}</Typography>
             <Typography variant="caption" color="text.secondary" noWrap sx={{ fontSize: '0.68rem' }}>
               {hwName}
             </Typography>
@@ -86,25 +88,25 @@ export const GPUPanel: React.FC<GPUPanelProps> = ({ sensors, history }) => {
 
         {/* Key stat tiles */}
         <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 2 }}>
-          <StatTile label="Core Load" value={coreLoad?.value ?? null}  unit="%" color={accent} />
-          <StatTile label="Temp"      value={gpuTemp?.value ?? null}   unit="°C" color={tempColor} />
+          <StatTile label={t('hardware.coreLoad')} value={coreLoad?.value ?? null}  unit="%" color={accent} />
+          <StatTile label={t('hardware.temp')}      value={gpuTemp?.value ?? null}   unit="°C" color={tempColor} />
           {gpuPower?.value != null && (
-            <StatTile label="Power"   value={gpuPower.value}           unit="W"  color={theme.palette.warning.main} />
+            <StatTile label={t('hardware.power')}   value={gpuPower.value}           unit="W"  color={theme.palette.warning.main} />
           )}
-          <StatTile label="Core Clk"  value={coreClock?.value ?? null} unit="MHz" color={theme.palette.primary.main} />
+          <StatTile label={t('hardware.coreClk')}  value={coreClock?.value ?? null} unit="MHz" color={theme.palette.primary.main} />
         </Box>
 
         {/* Sparklines row */}
         <Box sx={{ display: 'flex', gap: 1.5, mb: 2 }}>
           <Box sx={{ flex: 1 }}>
             <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.68rem', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-              Load (60s)
+              {t('hardware.load60s')}
             </Typography>
             <Sparkline data={coreLoadHistory} color={accent} height={44} unit="%" />
           </Box>
           <Box sx={{ flex: 1 }}>
             <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.68rem', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-              Temp (60s)
+              {t('hardware.temp60s')}
             </Typography>
             <Sparkline data={gpuTempHistory} color={tempColor} height={44} unit="°C" />
           </Box>
@@ -115,12 +117,12 @@ export const GPUPanel: React.FC<GPUPanelProps> = ({ sensors, history }) => {
           <>
             <Divider sx={{ mb: 1.5, opacity: 0.4 }} />
             <Typography variant="overline" color="text.secondary" sx={{ fontSize: '0.65rem', mb: 1, display: 'block' }}>
-              VRAM
+              {t('hardware.vram')}
             </Typography>
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 1.5 }}>
               {vramUsed && (
                 <StatTile
-                  label="Used"
+                  label={t('hardware.used')}
                   value={vramUsed.value}
                   unit={vramUsed.unit}
                   color={accent}
@@ -128,15 +130,15 @@ export const GPUPanel: React.FC<GPUPanelProps> = ({ sensors, history }) => {
                 />
               )}
               {vramFree && (
-                <StatTile label="Free" value={vramFree.value} unit={vramFree.unit} color={theme.palette.success.main} />
+                <StatTile label={t('hardware.free')} value={vramFree.value} unit={vramFree.unit} color={theme.palette.success.main} />
               )}
               {vramPct !== null && (
-                <StatTile label="Usage" value={vramPct} unit="%" color={accent} />
+                <StatTile label={t('hardware.usage')} value={vramPct} unit="%" color={accent} />
               )}
             </Box>
             {vramPct !== null && (
               <GaugeBar
-                label="VRAM utilisation"
+                label={t('hardware.vramUtil')}
                 value={vramPct}
                 unit="%"
                 color={accent}
@@ -151,7 +153,7 @@ export const GPUPanel: React.FC<GPUPanelProps> = ({ sensors, history }) => {
           <>
             <Divider sx={{ mb: 1.5, mt: 1.5, opacity: 0.4 }} />
             <Typography variant="overline" color="text.secondary" sx={{ fontSize: '0.65rem', mb: 1, display: 'block' }}>
-              Engines
+              {t('hardware.engines')}
             </Typography>
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
               {allLoads.map((s) => (
@@ -164,13 +166,13 @@ export const GPUPanel: React.FC<GPUPanelProps> = ({ sensors, history }) => {
         {/* Fan + extra clocks */}
         <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 1.5 }}>
           {fanSpeed && (
-            <StatTile label="Fan"      value={fanSpeed.value}   unit="RPM" color={theme.palette.info.main} />
+            <StatTile label={t('hardware.fan')}      value={fanSpeed.value}   unit="RPM" color={theme.palette.info.main} />
           )}
           {memClock && (
-            <StatTile label="Mem Clk"  value={memClock.value}   unit="MHz" color={theme.palette.primary.light} />
+            <StatTile label={t('hardware.memClk')}  value={memClock.value}   unit="MHz" color={theme.palette.primary.light} />
           )}
           {hotspotTemp && (
-            <StatTile label="Hotspot"  value={hotspotTemp.value} unit="°C"
+            <StatTile label={t('hardware.hotspot')}  value={hotspotTemp.value} unit="°C"
               color={
                 (hotspotTemp.value ?? 0) >= 100 ? theme.palette.error.main :
                 (hotspotTemp.value ?? 0) >= 80  ? theme.palette.warning.main :

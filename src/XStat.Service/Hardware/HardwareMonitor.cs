@@ -1,4 +1,5 @@
 using LibreHardwareMonitor.Hardware;
+using System.Diagnostics;
 using XStat.Service.Models;
 
 namespace XStat.Service.Hardware;
@@ -11,6 +12,23 @@ public sealed class HardwareMonitor : IDisposable
     private readonly Computer _computer;
     private readonly ILogger<HardwareMonitor> _logger;
     private bool _disposed;
+
+    // Slow hardware (storage SMART + NICs) is collected on a background thread by
+    // SensorBroadcastService, because a single SMART query can take ~1s per disk and
+    // 5 disks serially = 5.6s — far too slow for the hot path. The background collector
+    // refreshes this cache; GetSnapshot() just reads it.
+    private static bool IsSlowHardware(HardwareType t) =>
+        t == HardwareType.Storage || t == HardwareType.Network;
+
+    private readonly object _slowLock = new();
+    private List<SensorReading> _slowReadings = new();
+
+    // Diagnostics: per-hardware Update() timings (ms). Fast hardware from the last
+    // GetSnapshot(); slow hardware from the last background collection.
+    public IReadOnlyList<(string Name, string Type, double Ms)> LastUpdateTimings { get; private set; }
+        = Array.Empty<(string, string, double)>();
+    public IReadOnlyList<(string Name, string Type, double Ms)> LastSlowTimings { get; private set; }
+        = Array.Empty<(string, string, double)>();
 
     public HardwareMonitor(ILogger<HardwareMonitor> logger)
     {
@@ -59,10 +77,25 @@ public sealed class HardwareMonitor : IDisposable
     {
         var raw = new List<SensorReading>();
 
+        // Fast hardware only — CPU/GPU/RAM/motherboard. Update every call (cheap).
+        // Storage/NIC are skipped here; they're refreshed by UpdateSlowHardware() on
+        // a background thread and merged from the cache below.
+        var sw = Stopwatch.StartNew();
+        var timings = new List<(string, string, double)>();
         foreach (var hw in _computer.Hardware)
         {
-            CollectHardware(hw, raw);
+            if (IsSlowHardware(hw.HardwareType)) continue;
+            sw.Restart();
+            CollectHardware(hw, raw, doUpdate: true);
+            sw.Stop();
+            timings.Add((hw.Name, hw.HardwareType.ToString(), Math.Round(sw.Elapsed.TotalMilliseconds, 1)));
         }
+        LastUpdateTimings = timings;
+
+        // Merge cached slow-hardware readings (refreshed by the background collector).
+        List<SensorReading> slow;
+        lock (_slowLock) { slow = _slowReadings; }
+        raw.AddRange(slow);
 
         // Deduplicate: LHM can surface the same sensor via both parent and subhardware
         var seen    = new HashSet<string>(raw.Count);
@@ -73,6 +106,31 @@ public sealed class HardwareMonitor : IDisposable
         return new HardwareSnapshot(
             DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             sensors);
+    }
+
+    /// <summary>
+    /// Collects slow hardware (storage SMART + network adapters) into the cache.
+    /// Meant to be called on a background thread by SensorBroadcastService, since
+    /// SMART queries can take ~1s per disk and block the hot path otherwise.
+    /// </summary>
+    public void UpdateSlowHardware()
+    {
+        var slow = new List<SensorReading>();
+        var sw = Stopwatch.StartNew();
+        var timings = new List<(string, string, double)>();
+        foreach (var hw in _computer.Hardware)
+        {
+            if (!IsSlowHardware(hw.HardwareType)) continue;
+            sw.Restart();
+            CollectHardware(hw, slow, doUpdate: true);
+            sw.Stop();
+            timings.Add((hw.Name, hw.HardwareType.ToString(), Math.Round(sw.Elapsed.TotalMilliseconds, 1)));
+        }
+        lock (_slowLock)
+        {
+            _slowReadings = slow;
+            LastSlowTimings = timings;
+        }
     }
 
     /// <summary>
@@ -91,17 +149,17 @@ public sealed class HardwareMonitor : IDisposable
         // Virtual hotspot / mobile broadband adapters
         System.Text.RegularExpressions.Regex.IsMatch(name, @"^Local Area Connection\*");
 
-    private static void CollectHardware(IHardware hw, List<SensorReading> sensors)
+    private static void CollectHardware(IHardware hw, List<SensorReading> sensors, bool doUpdate)
     {
         // Skip noise: virtual/filter-layer network adapters
         if (hw.HardwareType == HardwareType.Network && IsVirtualNetworkAdapter(hw.Name))
             return;
 
-        hw.Update();
+        if (doUpdate) hw.Update();
 
         foreach (var subHw in hw.SubHardware)
         {
-            CollectHardware(subHw, sensors);
+            CollectHardware(subHw, sensors, doUpdate);
         }
 
         foreach (var sensor in hw.Sensors)

@@ -4,6 +4,7 @@ import {
   Tooltip, alpha, useTheme, ToggleButtonGroup, ToggleButton,
   TextField, Button,
 } from '@mui/material'
+import { useTranslation } from 'react-i18next'
 import ImageIcon        from '@mui/icons-material/Image'
 import ColorLensIcon    from '@mui/icons-material/ColorLens'
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline'
@@ -15,12 +16,12 @@ const PRESET_COLORS = [
 ]
 
 const GRID_DOT_COLORS = [
-  { value: '#ffffff', label: 'White' },
-  { value: '#888888', label: 'Gray' },
-  { value: '#444444', label: 'Dark gray' },
-  { value: '#0084ff', label: 'Blue' },
-  { value: '#00e676', label: 'Green' },
-  { value: '#ff5252', label: 'Red' },
+  { value: '#ffffff', labelKey: 'canvasProperties.colorWhite' },
+  { value: '#888888', labelKey: 'canvasProperties.colorGray' },
+  { value: '#444444', labelKey: 'canvasProperties.colorDarkGray' },
+  { value: '#0084ff', labelKey: 'canvasProperties.colorBlue' },
+  { value: '#00e676', labelKey: 'canvasProperties.colorGreen' },
+  { value: '#ff5252', labelKey: 'canvasProperties.colorRed' },
 ]
 
 interface Props {
@@ -45,6 +46,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 export const CanvasProperties: React.FC<Props> = ({ panel, onUpdate }) => {
   const theme = useTheme()
+  const { t } = useTranslation()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // RAF throttle for native color pickers
@@ -101,7 +103,7 @@ export const CanvasProperties: React.FC<Props> = ({ panel, onUpdate }) => {
       {/* Header */}
       <Box sx={{ display: 'flex', alignItems: 'center' }}>
         <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-          Canvas
+          {t('canvasProperties.canvas')}
         </Typography>
       </Box>
 
@@ -109,7 +111,7 @@ export const CanvasProperties: React.FC<Props> = ({ panel, onUpdate }) => {
 
       {/* ── Grid dots ──────────────────────────────────────────────── */}
       <Box>
-        <SectionLabel>Grid</SectionLabel>
+        <SectionLabel>{t('canvasProperties.grid')}</SectionLabel>
         <FormControlLabel
           control={
             <Switch
@@ -118,15 +120,15 @@ export const CanvasProperties: React.FC<Props> = ({ panel, onUpdate }) => {
               onChange={e => onUpdate({ canvasShowGrid: e.target.checked })}
             />
           }
-          label={<Typography variant="body2">Show dot grid</Typography>}
+          label={<Typography variant="body2">{t('canvasProperties.showDotGrid')}</Typography>}
         />
 
         {panel.canvasShowGrid && (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 0.5 }}>
-            <Typography variant="caption" sx={{ color: 'text.secondary' }}>Dot color</Typography>
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>{t('canvasProperties.dotColor')}</Typography>
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
               {GRID_DOT_COLORS.map(c => (
-                <Tooltip key={c.value} title={c.label} arrow>
+                <Tooltip key={c.value} title={t(c.labelKey)} arrow>
                   <Box
                     onClick={() => onUpdate({ canvasGridColor: c.value })}
                     sx={{
@@ -156,7 +158,7 @@ export const CanvasProperties: React.FC<Props> = ({ panel, onUpdate }) => {
               <TextField
                 size="small"
                 fullWidth
-                label="Hex"
+                label={t('canvasProperties.hex')}
                 value={panel.canvasGridColor ?? '#ffffff'}
                 onChange={e => onUpdate({ canvasGridColor: e.target.value })}
                 inputProps={{ spellCheck: false }}
@@ -171,7 +173,7 @@ export const CanvasProperties: React.FC<Props> = ({ panel, onUpdate }) => {
 
       {/* ── Background type ────────────────────────────────────────── */}
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-        <SectionLabel>Background</SectionLabel>
+        <SectionLabel>{t('canvasProperties.background')}</SectionLabel>
 
         <ToggleButtonGroup
           size="small"
@@ -185,10 +187,10 @@ export const CanvasProperties: React.FC<Props> = ({ panel, onUpdate }) => {
           }}
         >
           <ToggleButton value="color">
-            <ColorLensIcon fontSize="small" sx={{ mr: 0.5 }} /> Solid
+            <ColorLensIcon fontSize="small" sx={{ mr: 0.5 }} /> {t('canvasProperties.solid')}
           </ToggleButton>
           <ToggleButton value="image">
-            <ImageIcon fontSize="small" sx={{ mr: 0.5 }} /> Image
+            <ImageIcon fontSize="small" sx={{ mr: 0.5 }} /> {t('canvasProperties.image')}
           </ToggleButton>
         </ToggleButtonGroup>
 
@@ -227,7 +229,7 @@ export const CanvasProperties: React.FC<Props> = ({ panel, onUpdate }) => {
               <TextField
                 size="small"
                 fullWidth
-                label="Hex"
+                label={t('canvasProperties.hex')}
                 value={panel.canvasBackground}
                 onChange={e => onUpdate({ canvasBackground: e.target.value })}
                 inputProps={{ spellCheck: false }}
@@ -251,7 +253,7 @@ export const CanvasProperties: React.FC<Props> = ({ panel, onUpdate }) => {
                   position: 'relative',
                 }}
               >
-                <Tooltip title="Remove image" arrow>
+                <Tooltip title={t('canvasProperties.removeImage')} arrow>
                   <Box
                     onClick={() => onUpdate({ canvasBackgroundImage: null })}
                     sx={{
@@ -275,7 +277,7 @@ export const CanvasProperties: React.FC<Props> = ({ panel, onUpdate }) => {
               onClick={() => fileInputRef.current?.click()}
               sx={{ fontSize: '0.75rem' }}
             >
-              Choose file…
+              {t('canvasProperties.chooseFile')}
             </Button>
             <input
               ref={fileInputRef}
@@ -288,8 +290,8 @@ export const CanvasProperties: React.FC<Props> = ({ panel, onUpdate }) => {
             <TextField
               size="small"
               fullWidth
-              label="Or paste URL"
-              placeholder="https://…"
+              label={t('canvasProperties.orPasteUrl')}
+              placeholder={t('canvasProperties.urlPlaceholder')}
               value={panel.canvasBackgroundImage?.startsWith('data:') ? '' : (panel.canvasBackgroundImage ?? '')}
               onChange={e => handleUrlChange(e.target.value)}
               inputProps={{ spellCheck: false }}

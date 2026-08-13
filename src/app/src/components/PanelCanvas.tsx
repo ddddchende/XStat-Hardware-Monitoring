@@ -9,6 +9,7 @@ type Dir = 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w' | 'nw'
 
 const MIN_SIZE = 10
 const HANDLE_PX = 8
+const SNAP_THRESHOLD = 6
 
 interface DragHandle { dir: Dir; style: React.CSSProperties }
 const HANDLES: DragHandle[] = [
@@ -29,6 +30,42 @@ interface ActiveOp {
   mx0: number; my0: number
   ox: number;  oy: number
   ow: number;  oh: number
+}
+
+/**
+ * Smart-guide snap: align a widget's edges (left/right/top/bottom) and centers
+ * to other widgets' edges/centers and the canvas edges/center, on both axes.
+ * Returns the adjusted x/y plus the guide line positions to draw.
+ */
+function smartSnap(
+  x: number, y: number, w: number, h: number,
+  others: LayoutItem[], selfId: string,
+  canvasW: number, canvasH: number,
+): { x: number; y: number; vGuide: number | null; hGuide: number | null } {
+  const curXs = [x, x + w / 2, x + w]
+  const curYs = [y, y + h / 2, y + h]
+  const tx: number[] = [0, canvasW / 2, canvasW]
+  const ty: number[] = [0, canvasH / 2, canvasH]
+  for (const l of others) {
+    if (l.i === selfId) continue
+    tx.push(l.x, l.x + l.w / 2, l.x + l.w)
+    ty.push(l.y, l.y + l.h / 2, l.y + l.h)
+  }
+  let bestDX: number | null = null, vGuide: number | null = null
+  for (const ca of curXs) for (const t of tx) {
+    const d = t - ca
+    if (Math.abs(d) <= SNAP_THRESHOLD && (bestDX === null || Math.abs(d) < Math.abs(bestDX))) { bestDX = d; vGuide = t }
+  }
+  let bestDY: number | null = null, hGuide: number | null = null
+  for (const ca of curYs) for (const t of ty) {
+    const d = t - ca
+    if (Math.abs(d) <= SNAP_THRESHOLD && (bestDY === null || Math.abs(d) < Math.abs(bestDY))) { bestDY = d; hGuide = t }
+  }
+  return {
+    x: bestDX !== null ? x + bestDX : x,
+    y: bestDY !== null ? y + bestDY : y,
+    vGuide, hGuide,
+  }
 }
 
 interface Props {
@@ -63,9 +100,13 @@ export const PanelCanvas: React.FC<Props> = ({
   const layoutRef = useRef(panel.layout)
   const geoRef    = useRef(onWidgetGeometry)
   const snapRef   = useRef(snapToGrid)
+  const vGuideRef = useRef<HTMLDivElement | null>(null)
+  const hGuideRef = useRef<HTMLDivElement | null>(null)
+  const canvasSizeRef = useRef({ w: panel.canvasWidth, h: panel.canvasHeight })
   useEffect(() => { layoutRef.current = panel.layout },   [panel.layout])
   useEffect(() => { geoRef.current    = onWidgetGeometry }, [onWidgetGeometry])
   useEffect(() => { snapRef.current   = snapToGrid },       [snapToGrid])
+  useEffect(() => { canvasSizeRef.current = { w: panel.canvasWidth, h: panel.canvasHeight } }, [panel.canvasWidth, panel.canvasHeight])
 
   // Attach global mouse handlers once; read latest state via refs
   useEffect(() => {
@@ -125,6 +166,23 @@ export const PanelCanvas: React.FC<Props> = ({
         }
       }
 
+      // Smart guides: snap a moved widget to other widgets' edges/centers and
+      // the canvas (left/right/top/bottom + center, both axes) — like Photoshop.
+      if (op.kind === 'move') {
+        const snap = smartSnap(x, y, w, h, layoutRef.current, op.id, canvasSizeRef.current.w, canvasSizeRef.current.h)
+        x = snap.x
+        y = snap.y
+        const vg = vGuideRef.current, hg = hGuideRef.current
+        if (vg) {
+          if (snap.vGuide !== null) { vg.style.display = 'block'; vg.style.left = `${snap.vGuide}px` }
+          else vg.style.display = 'none'
+        }
+        if (hg) {
+          if (snap.hGuide !== null) { hg.style.display = 'block'; hg.style.top = `${snap.hGuide}px` }
+          else hg.style.display = 'none'
+        }
+      }
+
       const el = document.getElementById(`xw-${op.id}`)
       if (el) {
         el.style.left   = `${x}px`
@@ -139,6 +197,9 @@ export const PanelCanvas: React.FC<Props> = ({
       if (!op) return
       opRef.current = null
       document.body.style.cursor = ''
+      // Hide smart alignment guides when the drag ends.
+      if (vGuideRef.current) vGuideRef.current.style.display = 'none'
+      if (hGuideRef.current) hGuideRef.current.style.display = 'none'
 
       // Only commit if the drag actually moved (inline styles were written).
       // A plain click never sets el.style.left, so el.style.left is '' — skip commit.
@@ -193,7 +254,12 @@ export const PanelCanvas: React.FC<Props> = ({
   return (
     <Box
       onClick={e => { if (e.target === e.currentTarget) { onSelect(null); onCanvasSelect?.() } }}
-      onMouseDown={e => { if (e.button === 0 && e.target === e.currentTarget) onPanStart?.(e) }}
+      onMouseDown={e => {
+        // Middle button: pan the canvas from anywhere (e.g. after zooming in).
+        if (e.button === 1) { e.preventDefault(); onPanStart?.(e); return }
+        // Left button on empty canvas: pan too.
+        if (e.button === 0 && e.target === e.currentTarget) onPanStart?.(e)
+      }}
       sx={{
         position: 'relative',
         width: panel.canvasWidth,
@@ -301,6 +367,14 @@ export const PanelCanvas: React.FC<Props> = ({
           </Box>
         )
       })}
+
+      {/* Smart alignment guides — shown while dragging to align with other widgets */}
+      {isEditMode && (
+        <Box sx={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 50 }}>
+          <Box ref={vGuideRef} sx={{ position: 'absolute', display: 'none', top: 0, bottom: 0, width: 0, borderLeft: `1px solid ${theme.palette.primary.main}` }} />
+          <Box ref={hGuideRef} sx={{ position: 'absolute', display: 'none', left: 0, right: 0, height: 0, borderTop: `1px solid ${theme.palette.primary.main}` }} />
+        </Box>
+      )}
     </Box>
   )
 }

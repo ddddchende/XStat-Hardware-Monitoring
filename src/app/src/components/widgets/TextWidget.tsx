@@ -1,5 +1,6 @@
 import React from 'react'
 import { Box, Typography } from '@mui/material'
+import { useTranslation } from 'react-i18next'
 import type { PanelWidget } from '@/types/panel'
 
 interface Props {
@@ -7,8 +8,9 @@ interface Props {
 }
 
 export const TextWidget: React.FC<Props> = ({ widget }) => {
+  const { t } = useTranslation()
   const color      = widget.color ?? '#ffffff'
-  const text       = widget.text ?? 'Label'
+  const text       = widget.text || t('widget.textDefault')
   const align      = widget.textAlign ?? 'left'
   const fontWeight = widget.fontWeight ?? 'normal'
   const fontSize   = widget.fontSize ?? 14

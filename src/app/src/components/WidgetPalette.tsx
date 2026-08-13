@@ -1,5 +1,6 @@
 import React from 'react'
 import { Box, Typography, Tooltip, alpha, useTheme } from '@mui/material'
+import { useTranslation } from 'react-i18next'
 import NumbersIcon       from '@mui/icons-material/Numbers'
 import LinearScaleIcon   from '@mui/icons-material/LinearScale'
 import ShowChartIcon     from '@mui/icons-material/ShowChart'
@@ -12,18 +13,18 @@ import type { WidgetType } from '@/types/panel'
 
 const ITEMS: {
   type: WidgetType
-  label: string
+  labelKey: string
   icon: React.ReactNode
-  hint: string
+  hintKey: string
 }[] = [
-  { type: 'SensorValue',     label: 'Value',     icon: <NumbersIcon sx={{ fontSize: 18 }} />,      hint: 'Large live sensor reading' },
-  { type: 'SensorBar',       label: 'Bar',        icon: <LinearScaleIcon sx={{ fontSize: 18 }} />,  hint: 'Progress bar for a sensor' },
-  { type: 'SensorSparkline', label: 'Sparkline',  icon: <ShowChartIcon sx={{ fontSize: 18 }} />,    hint: '60-second history chart' },
-  { type: 'SensorGauge',     label: 'Gauge',      icon: <SpeedIcon sx={{ fontSize: 18 }} />,        hint: 'Arc gauge for a sensor' },
-  { type: 'Clock',           label: 'Clock',      icon: <AccessTimeIcon sx={{ fontSize: 18 }} />,   hint: 'Current time display' },
-  { type: 'Text',            label: 'Text',       icon: <TextFieldsIcon sx={{ fontSize: 18 }} />,   hint: 'Static text label' },
-  { type: 'Image',           label: 'Image',      icon: <ImageIcon sx={{ fontSize: 18 }} />,         hint: 'Static image with opacity and fit controls' },
-  { type: 'Custom',          label: 'Custom',     icon: <CodeIcon sx={{ fontSize: 18 }} />,          hint: 'Your own HTML / CSS / JS widget' },
+  { type: 'SensorValue',     labelKey: 'palette.value',     icon: <NumbersIcon sx={{ fontSize: 18 }} />,      hintKey: 'palette.valueHint' },
+  { type: 'SensorBar',       labelKey: 'palette.bar',        icon: <LinearScaleIcon sx={{ fontSize: 18 }} />,  hintKey: 'palette.barHint' },
+  { type: 'SensorSparkline', labelKey: 'palette.sparkline',  icon: <ShowChartIcon sx={{ fontSize: 18 }} />,    hintKey: 'palette.sparklineHint' },
+  { type: 'SensorGauge',     labelKey: 'palette.gauge',      icon: <SpeedIcon sx={{ fontSize: 18 }} />,        hintKey: 'palette.gaugeHint' },
+  { type: 'Clock',           labelKey: 'palette.clock',      icon: <AccessTimeIcon sx={{ fontSize: 18 }} />,   hintKey: 'palette.clockHint' },
+  { type: 'Text',            labelKey: 'palette.text',       icon: <TextFieldsIcon sx={{ fontSize: 18 }} />,   hintKey: 'palette.textHint' },
+  { type: 'Image',           labelKey: 'palette.image',      icon: <ImageIcon sx={{ fontSize: 18 }} />,         hintKey: 'palette.imageHint' },
+  { type: 'Custom',          labelKey: 'palette.custom',     icon: <CodeIcon sx={{ fontSize: 18 }} />,          hintKey: 'palette.customHint' },
 ]
 
 interface Props {
@@ -32,6 +33,7 @@ interface Props {
 
 export const WidgetPalette: React.FC<Props> = ({ onAdd }) => {
   const theme = useTheme()
+  const { t } = useTranslation()
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', p: 1, gap: 0.25 }}>
@@ -43,11 +45,11 @@ export const WidgetPalette: React.FC<Props> = ({ onAdd }) => {
           display: 'block',
         }}
       >
-        Add Widget
+        {t('palette.addWidget')}
       </Typography>
 
-      {ITEMS.map(({ type, label, icon, hint }) => (
-        <Tooltip key={type} title={hint} placement="right" arrow>
+      {ITEMS.map(({ type, labelKey, icon, hintKey }) => (
+        <Tooltip key={type} title={t(hintKey)} placement="right" arrow>
           <Box
             onClick={() => onAdd(type)}
             sx={{
@@ -71,7 +73,7 @@ export const WidgetPalette: React.FC<Props> = ({ onAdd }) => {
               {icon}
             </Box>
             <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.8rem' }}>
-              {label}
+              {t(labelKey)}
             </Typography>
           </Box>
         </Tooltip>

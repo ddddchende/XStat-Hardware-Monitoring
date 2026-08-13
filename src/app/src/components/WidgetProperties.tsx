@@ -4,6 +4,7 @@ import {
   ToggleButton, ToggleButtonGroup, Divider, Button, Autocomplete,
   Tooltip, alpha, useTheme, Select, MenuItem, InputLabel, FormControl, IconButton,
 } from '@mui/material'
+import { useTranslation } from 'react-i18next'
 import SensorsIcon from '@mui/icons-material/Sensors'
 import FormatAlignLeftIcon   from '@mui/icons-material/FormatAlignLeft'
 import FormatAlignCenterIcon from '@mui/icons-material/FormatAlignCenter'
@@ -110,14 +111,15 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 }
 
 function ColorRow({ value, onChange }: { value: string; onChange: (c: string) => void }) {
+  const { t } = useTranslation()
   return (
     <Box>
-      <SectionLabel>Color</SectionLabel>
+      <SectionLabel>{t('widgetProperties.color')}</SectionLabel>
       <ColorSwatchesPicker value={value} onChange={onChange} />
       <TextField
         size="small"
         fullWidth
-        label="Custom hex"
+        label={t('widgetProperties.customHex')}
         value={value ?? ''}
         onChange={e => onChange(e.target.value)}
         inputProps={{ spellCheck: false }}
@@ -131,12 +133,13 @@ function AccentColorRow({ value, onChange, visible, onVisibleChange }: {
   value: string; onChange: (c: string) => void
   visible?: boolean; onVisibleChange?: (v: boolean) => void
 }) {
+  const { t } = useTranslation()
   const on = visible ?? true
   return (
     <Box>
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
         <Typography variant="caption" sx={{ color: 'text.disabled', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', opacity: on ? 1 : 0.45 }}>
-          Accent (bar / line / arc)
+          {t('widgetProperties.accent')}
         </Typography>
         <Switch size="small" checked={on} onChange={e => onVisibleChange?.(e.target.checked)} sx={{ mr: -0.5 }} />
       </Box>
@@ -146,7 +149,7 @@ function AccentColorRow({ value, onChange, visible, onVisibleChange }: {
           <TextField
             size="small"
             fullWidth
-            label="Custom hex"
+            label={t('widgetProperties.customHex')}
             value={value}
             onChange={e => onChange(e.target.value)}
             inputProps={{ spellCheck: false }}
@@ -177,6 +180,7 @@ function TextStyleSection({
   onFontFamilyChange: (f: string) => void
   onItalicChange: (i: boolean) => void
 }) {
+  const { t } = useTranslation()
   return (
     <Box>
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
@@ -205,7 +209,7 @@ function TextStyleSection({
         <TextField
           size="small"
           fullWidth
-          label="Color (hex)"
+          label={t('widgetProperties.colorHex')}
           value={color}
           onChange={e => onColorChange(e.target.value)}
           inputProps={{ spellCheck: false }}
@@ -214,7 +218,7 @@ function TextStyleSection({
         <TextField
           size="small"
           fullWidth
-          label="Font Size (px)"
+          label={t('widgetProperties.fontSize')}
           type="number"
           value={fontSize}
           onChange={e => onFontSizeChange(Math.max(6, Number(e.target.value)))}
@@ -226,14 +230,14 @@ function TextStyleSection({
             control={
               <Switch size="small" checked={bold} onChange={e => onBoldChange(e.target.checked)} />
             }
-            label={<Typography variant="body2" sx={{ fontWeight: 700 }}>Bold</Typography>}
+            label={<Typography variant="body2" sx={{ fontWeight: 700 }}>{t('widgetProperties.bold')}</Typography>}
           />
           <FormControlLabel
             sx={{ mr: 0, ml: 0 }}
             control={
               <Switch size="small" checked={italic} onChange={e => onItalicChange(e.target.checked)} />
             }
-            label={<Typography variant="body2" sx={{ fontStyle: 'italic' }}>Italic</Typography>}
+            label={<Typography variant="body2" sx={{ fontStyle: 'italic' }}>{t('widgetProperties.italic')}</Typography>}
           />
         </Box>
         <Autocomplete
@@ -243,7 +247,7 @@ function TextStyleSection({
           value={fontFamily}
           onInputChange={(_, v) => onFontFamilyChange(v)}
           renderInput={params => (
-            <TextField {...params} label="Font family" placeholder="default" />
+            <TextField {...params} label={t('widgetProperties.fontFamily')} placeholder={t('widgetProperties.fontFamilyPlaceholder')} />
           )}
           renderOption={(props, option) => (
             <li {...props} style={{ fontFamily: option, fontSize: '0.82rem' }}>{option}</li>
@@ -263,6 +267,7 @@ const hasRange = (w: PanelWidget) =>
 
 export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, allWidgets, onUpdate, onGeometry, onRemove, onDuplicate }) => {
   const theme = useTheme()
+  const { t } = useTranslation()
   const sensors = snapshot?.sensors ?? []
   const [sensorDialogOpen, setSensorDialogOpen] = useState(false)
   const [renamingWidget, setRenamingWidget] = useState(false)
@@ -316,7 +321,7 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
             sx={{ flex: 1, '& .MuiInputBase-input': { py: 0.4, fontSize: '0.85rem', fontWeight: 700 } }}
           />
         ) : (
-          <Tooltip title="Click to rename" arrow placement="bottom-start">
+          <Tooltip title={t('widgetProperties.clickToRename')} arrow placement="bottom-start">
             <Typography
               variant="subtitle2"
               onClick={startRename}
@@ -332,7 +337,7 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
         )}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25 }}>
           {onDuplicate && (
-            <Tooltip title="Duplicate widget" arrow>
+            <Tooltip title={t('widgetProperties.duplicateWidget')} arrow>
               <Box
                 onClick={onDuplicate}
                 sx={{
@@ -344,7 +349,7 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
               </Box>
             </Tooltip>
           )}
-          <Tooltip title="Delete widget" arrow>
+          <Tooltip title={t('widgetProperties.deleteWidget')} arrow>
             <Box
               onClick={onRemove}
               sx={{
@@ -363,7 +368,7 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
       {/* ── Position & Size ──────────────────────────────────────── */}
       {layout && onGeometry && (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-          <SectionLabel>Position &amp; Size</SectionLabel>
+          <SectionLabel>{t('widgetProperties.positionSize')}</SectionLabel>
           <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1 }}>
             <TextField
               size="small" label="X" type="number"
@@ -397,9 +402,9 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
 
       {/* ── Layer ──────────────────────────────────────────────── */}
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-        <SectionLabel>Layer</SectionLabel>
+        <SectionLabel>{t('widgetProperties.layer')}</SectionLabel>
         <Box sx={{ display: 'flex', gap: 0.25, alignItems: 'center' }}>
-          <Tooltip title="Send to Back" arrow>
+          <Tooltip title={t('widgetProperties.sendToBack')} arrow>
             <IconButton size="small" onClick={() => {
               const min = Math.min(...(allWidgets ?? [widget]).map(w => w.zIndex ?? 0))
               onUpdate({ zIndex: min - 1 })
@@ -407,17 +412,17 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
               <KeyboardDoubleArrowDownIcon fontSize="small" />
             </IconButton>
           </Tooltip>
-          <Tooltip title="Send Backward" arrow>
+          <Tooltip title={t('widgetProperties.sendBackward')} arrow>
             <IconButton size="small" onClick={() => onUpdate({ zIndex: (widget.zIndex ?? 0) - 1 })}>
               <KeyboardArrowDownIcon fontSize="small" />
             </IconButton>
           </Tooltip>
-          <Tooltip title="Bring Forward" arrow>
+          <Tooltip title={t('widgetProperties.bringForward')} arrow>
             <IconButton size="small" onClick={() => onUpdate({ zIndex: (widget.zIndex ?? 0) + 1 })}>
               <KeyboardArrowUpIcon fontSize="small" />
             </IconButton>
           </Tooltip>
-          <Tooltip title="Bring to Front" arrow>
+          <Tooltip title={t('widgetProperties.bringToFront')} arrow>
             <IconButton size="small" onClick={() => {
               const max = Math.max(...(allWidgets ?? [widget]).map(w => w.zIndex ?? 0))
               onUpdate({ zIndex: max + 1 })
@@ -426,7 +431,7 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
             </IconButton>
           </Tooltip>
           <Typography variant="caption" sx={{ ml: 'auto', color: 'text.disabled' }}>
-            z: {widget.zIndex ?? 0}
+            {t('widgetProperties.z', { value: widget.zIndex ?? 0 })}
           </Typography>
         </Box>
       </Box>
@@ -436,7 +441,7 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
       {/* ── Sensor binding ──────────────────────────────────────── */}
       {isSensorWidget(widget) && (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-          <SectionLabel>Sensor</SectionLabel>
+          <SectionLabel>{t('widgetProperties.sensor')}</SectionLabel>
 
           {/* Bind sensor button */}
           <Button
@@ -459,7 +464,7 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
                 noWrap
                 sx={{ fontSize: '0.8rem', lineHeight: 1.3, color: selectedSensor ? 'text.primary' : 'text.disabled' }}
               >
-                {selectedSensor ? selectedSensor.name : 'Choose sensor…'}
+                {selectedSensor ? selectedSensor.name : t('widgetProperties.chooseSensor')}
               </Typography>
               {selectedSensor && (
                 <Typography variant="caption" noWrap sx={{ fontSize: '0.68rem', color: 'text.disabled', display: 'block' }}>
@@ -479,16 +484,16 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
           <TextField
             size="small"
             fullWidth
-            label="Label override"
-            placeholder={selectedSensor?.name ?? 'Sensor name'}
+            label={t('widgetProperties.labelOverride')}
+            placeholder={selectedSensor?.name ?? t('widgetProperties.sensorNamePlaceholder')}
             value={widget.label ?? ''}
             onChange={e => onUpdate({ label: e.target.value || undefined })}
           />
           <TextField
             size="small"
             fullWidth
-            label="Unit override"
-            placeholder={selectedSensor?.unit ?? 'e.g. °C'}
+            label={t('widgetProperties.unitOverride')}
+            placeholder={selectedSensor?.unit ?? t('widgetProperties.unitPlaceholder')}
             value={widget.unit ?? ''}
             onChange={e => onUpdate({ unit: e.target.value || undefined })}
           />
@@ -498,11 +503,11 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
       {/* ── Range (Bar + Gauge) ──────────────────────────────────── */}
       {hasRange(widget) && (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-          <SectionLabel>Range</SectionLabel>
+          <SectionLabel>{t('widgetProperties.range')}</SectionLabel>
           <Box sx={{ display: 'flex', gap: 1 }}>
             <TextField
               size="small"
-              label="Min"
+              label={t('widgetProperties.min')}
               type="number"
               value={widget.min ?? 0}
               onChange={e => onUpdate({ min: Number(e.target.value) })}
@@ -510,7 +515,7 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
             />
             <TextField
               size="small"
-              label="Max"
+              label={t('widgetProperties.max')}
               type="number"
               value={widget.max ?? 100}
               onChange={e => onUpdate({ max: Number(e.target.value) })}
@@ -523,7 +528,7 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
       {/* ── Clock settings ───────────────────────────────────────── */}
       {widget.type === 'Clock' && (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-          <SectionLabel>Clock</SectionLabel>
+          <SectionLabel>{t('widgetProperties.clock')}</SectionLabel>
 
           {/* Time section */}
           <FormControlLabel
@@ -533,7 +538,7 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
                 onChange={e => onUpdate({ showTime: e.target.checked })}
               />
             }
-            label={<Typography variant="body2">Show time</Typography>}
+            label={<Typography variant="body2">{t('widgetProperties.showTime')}</Typography>}
           />
           {(widget.showTime ?? true) && (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, pl: 1, borderLeft: '2px solid rgba(255,255,255,0.08)' }}>
@@ -551,7 +556,7 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
                     onChange={e => onUpdate({ showSeconds: e.target.checked })}
                   />
                 }
-                label={<Typography variant="body2">Show seconds</Typography>}
+                label={<Typography variant="body2">{t('widgetProperties.showSeconds')}</Typography>}
               />
               {(widget.clockFormat ?? '24h') === '12h' && (
                 <FormControlLabel
@@ -561,11 +566,11 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
                       onChange={e => onUpdate({ showAmPm: e.target.checked })}
                     />
                   }
-                  label={<Typography variant="body2">Show AM/PM</Typography>}
+                  label={<Typography variant="body2">{t('widgetProperties.showAmPm')}</Typography>}
                 />
               )}
               <TextStyleSection
-                title="Time style"
+                title={t('widgetProperties.timeStyle')}
                 color={widget.color ?? '#ffffff'}
                 fontSize={widget.fontSize ?? 28}
                 bold={widget.timeBold ?? true}
@@ -590,14 +595,14 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
                 onChange={e => onUpdate({ showDate: e.target.checked })}
               />
             }
-            label={<Typography variant="body2">Show date</Typography>}
+            label={<Typography variant="body2">{t('widgetProperties.showDate')}</Typography>}
           />
           {(widget.showDate ?? false) && (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, pl: 1, borderLeft: '2px solid rgba(255,255,255,0.08)' }}>
               <FormControl size="small" fullWidth>
-                <InputLabel>Date format</InputLabel>
+                <InputLabel>{t('widgetProperties.dateFormat')}</InputLabel>
                 <Select
-                  label="Date format"
+                  label={t('widgetProperties.dateFormat')}
                   value={widget.dateFormat ?? 'long'}
                   onChange={e => onUpdate({ dateFormat: e.target.value as any })}
                 >
@@ -609,7 +614,7 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
                 </Select>
               </FormControl>
               <TextStyleSection
-                title="Date style"
+                title={t('widgetProperties.dateStyle')}
                 color={widget.dateColor ?? 'rgba(255,255,255,0.45)'}
                 fontSize={widget.dateFontSize ?? 11}
                 bold={widget.dateBold ?? false}
@@ -629,11 +634,11 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
       {/* ── Text settings ────────────────────────────────────────── */}
       {widget.type === 'Text' && (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-          <SectionLabel>Text</SectionLabel>
+          <SectionLabel>{t('widgetProperties.text')}</SectionLabel>
           <TextField
             size="small"
             fullWidth
-            label="Content"
+            label={t('widgetProperties.content')}
             multiline
             minRows={2}
             value={widget.text ?? ''}
@@ -641,7 +646,7 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
           />
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Typography variant="caption" sx={{ color: 'text.secondary', flexShrink: 0 }}>
-              Align
+              {t('widgetProperties.align')}
             </Typography>
             <ToggleButtonGroup
               size="small"
@@ -662,7 +667,7 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
                 onChange={e => onUpdate({ fontWeight: e.target.checked ? 'bold' : 'normal' })}
               />
             }
-            label={<Typography variant="body2">Bold</Typography>}
+            label={<Typography variant="body2">{t('widgetProperties.bold')}</Typography>}
           />
         </Box>
       )}
@@ -670,11 +675,11 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
       {/* ── Font size (Text only) ─────────────────────── */}
       {widget.type === 'Text' && (
         <Box>
-          <SectionLabel>Font</SectionLabel>
+          <SectionLabel>{t('widgetProperties.font')}</SectionLabel>
           <TextField
             size="small"
             fullWidth
-            label="Size (px)"
+            label={t('widgetProperties.sizePx')}
             type="number"
             value={widget.fontSize ?? 14}
             inputProps={{ min: 8, max: 120, step: 2 }}
@@ -691,7 +696,7 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
                   onChange={e => onUpdate({ italic: e.target.checked })}
                 />
               }
-              label={<Typography variant="body2" sx={{ fontStyle: 'italic' }}>Italic</Typography>}
+              label={<Typography variant="body2" sx={{ fontStyle: 'italic' }}>{t('widgetProperties.italic')}</Typography>}
             />
           </Box>
           <Autocomplete
@@ -701,7 +706,7 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
             value={widget.fontFamily ?? ''}
             onInputChange={(_, v) => onUpdate({ fontFamily: v || undefined })}
             renderInput={params => (
-              <TextField {...params} label="Font family" placeholder="default" />
+              <TextField {...params} label={t('widgetProperties.fontFamily')} placeholder={t('widgetProperties.fontFamilyPlaceholder')} />
             )}
             renderOption={(props, option) => (
               <li {...props} style={{ fontFamily: option, fontSize: '0.82rem' }}>{option}</li>
@@ -726,7 +731,7 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
           )}
           <Divider />
           <TextStyleSection
-            title="Label"
+            title={t('widgetProperties.label')}
             visible={widget.showLabel ?? true}
             onVisibleChange={v => onUpdate({ showLabel: v })}
             color={widget.labelColor ?? 'rgba(255,255,255,0.45)'}
@@ -742,7 +747,7 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
           />
           <Divider />
           <TextStyleSection
-            title="Value"
+            title={t('widgetProperties.value')}
             visible={widget.showValue ?? true}
             onVisibleChange={v => onUpdate({ showValue: v })}
             color={widget.color ?? (widget.type === 'SensorBar' || widget.type === 'SensorGauge' ? '#7c6ef5' : '#03dac6')}
@@ -760,7 +765,7 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
             <>
               <Divider />
               <TextStyleSection
-                title="Unit"
+                title={t('widgetProperties.unit')}
                 visible={widget.showUnit ?? true}
                 onVisibleChange={v => onUpdate({ showUnit: v })}
                 color={widget.unitColor ?? 'rgba(255,255,255,0.45)'}
@@ -790,13 +795,13 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
       {/* ── Custom widget ─────────────────────────────────────────── */}
       {widget.type === 'Custom' && (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-          <SectionLabel>Custom HTML Widget</SectionLabel>
+          <SectionLabel>{t('widgetProperties.customHtmlWidget')}</SectionLabel>
           <Typography variant="caption" sx={{ color: 'text.disabled', lineHeight: 1.6 }}>
-            Write any HTML / CSS / JS. XStat injects live sensor data via{' '}
+            {t('widgetProperties.customDesc')}{' '}
             <code style={{ fontFamily: 'monospace', color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>
               window.postMessage
             </code>{' '}
-            on every poll tick.
+            {t('widgetProperties.customDescSuffix')}
           </Typography>
           <Button
             size="small"
@@ -806,7 +811,7 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
             onClick={() => window.xstat.widgetEditor.open(widget)}
             sx={{ textTransform: 'none', justifyContent: 'flex-start' }}
           >
-            Open Code Editor
+            {t('widgetProperties.openCodeEditor')}
           </Button>
         </Box>
       )}
@@ -814,7 +819,7 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
       {/* ── Image widget ──────────────────────────────────────────── */}
       {widget.type === 'Image' && (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-          <SectionLabel>Image</SectionLabel>
+          <SectionLabel>{t('widgetProperties.image')}</SectionLabel>
 
           {/* Preview */}
           {widget.imageDataUrl && (
@@ -840,7 +845,7 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
             startIcon={<ImageIcon sx={{ fontSize: 16 }} />}
             sx={{ textTransform: 'none', justifyContent: 'flex-start' }}
           >
-            {widget.imageDataUrl ? 'Change Image…' : 'Select Image…'}
+            {widget.imageDataUrl ? t('widgetProperties.changeImage') : t('widgetProperties.selectImage')}
             <Box
               component="input"
               type="file"
@@ -866,13 +871,13 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
               sx={{ textTransform: 'none', justifyContent: 'flex-start', py: 0.25 }}
               onClick={() => onUpdate({ imageDataUrl: undefined })}
             >
-              Remove Image
+              {t('widgetProperties.removeImage')}
             </Button>
           )}
 
           {/* Object fit */}
           <Box>
-            <SectionLabel>Size / Fit</SectionLabel>
+            <SectionLabel>{t('widgetProperties.sizeFit')}</SectionLabel>
             <ToggleButtonGroup
               size="small"
               exclusive
@@ -881,16 +886,16 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
               onChange={(_, v) => { if (v) onUpdate({ imageObjectFit: v }) }}
               sx={{ '& .MuiToggleButton-root': { fontSize: '0.65rem', py: 0.5, textTransform: 'none' } }}
             >
-              <ToggleButton value="contain">Contain</ToggleButton>
-              <ToggleButton value="cover">Cover</ToggleButton>
-              <ToggleButton value="fill">Fill</ToggleButton>
-              <ToggleButton value="none">None</ToggleButton>
+              <ToggleButton value="contain">{t('widgetProperties.contain')}</ToggleButton>
+              <ToggleButton value="cover">{t('widgetProperties.cover')}</ToggleButton>
+              <ToggleButton value="fill">{t('widgetProperties.fill')}</ToggleButton>
+              <ToggleButton value="none">{t('common.none')}</ToggleButton>
             </ToggleButtonGroup>
           </Box>
 
           {/* Opacity */}
           <Box>
-            <SectionLabel>Opacity — {Math.round((widget.imageOpacity ?? 1) * 100)}%</SectionLabel>
+            <SectionLabel>{t('widgetProperties.opacity', { pct: Math.round((widget.imageOpacity ?? 1) * 100) })}</SectionLabel>
             <Box
               component="input"
               type="range"
