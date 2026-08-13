@@ -12,6 +12,8 @@ import ExpandMoreIcon      from '@mui/icons-material/ExpandMore'
 import DeleteOutlineIcon   from '@mui/icons-material/DeleteOutline'
 import ZoomInIcon          from '@mui/icons-material/ZoomIn'
 import GridOnIcon           from '@mui/icons-material/GridOn'
+import UndoIcon             from '@mui/icons-material/Undo'
+import RedoIcon             from '@mui/icons-material/Redo'
 
 import { usePanelLayout }    from '@/hooks/usePanelLayout'
 import { useSensorHistory }  from '@/hooks/useSensorHistory'
@@ -32,10 +34,12 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
   const theme = useTheme()
   const {
     panels, activePanel,
-    updateLayout, addWidget, updateWidget, removeWidget,
+    updateLayout, addWidget, updateWidget, removeWidget, duplicateWidget,
     updateWidgetGeometry, updateCanvasSize,
     createPanel, deletePanel, renamePanel, setActivePanel,
     updateCanvasBackground, updateCanvasSettings, exportPanel, importPanel,
+    undo, canUndo,
+    redo, canRedo,
   } = usePanelLayout()
   const history = useSensorHistory(snapshot)
 
@@ -57,6 +61,28 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
   )
 
   useEffect(() => { zoomRef.current = zoom }, [zoom])
+
+  // Ctrl+Z undo, Ctrl+Shift+Z / Ctrl+Y redo — bound to the latest fns so the
+  // listener is attached once and stays stable.
+  const undoRef = useRef(undo)
+  const redoRef = useRef(redo)
+  useEffect(() => { undoRef.current = undo }, [undo])
+  useEffect(() => { redoRef.current = redo }, [redo])
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (!(e.ctrlKey || e.metaKey)) return
+      const k = e.key.toLowerCase()
+      if (k === 'z' && !e.shiftKey) {
+        e.preventDefault()
+        undoRef.current()
+      } else if ((k === 'z' && e.shiftKey) || k === 'y') {
+        e.preventDefault()
+        redoRef.current()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   // Single source of truth: sync state → inline style
   useEffect(() => {
@@ -113,6 +139,11 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
   function handleRemove(id: string) {
     removeWidget(id)
     setSelectedWidgetId(null)
+  }
+
+  function handleDuplicate(id: string) {
+    const newId = duplicateWidget(id)
+    if (newId) setSelectedWidgetId(newId)
   }
 
   function handleCanvasSelect() {
@@ -299,6 +330,30 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
                   <GridOnIcon sx={{ fontSize: 16 }} />
                 </IconButton>
               </Tooltip>
+              <Tooltip title={canUndo ? 'Undo (Ctrl+Z)' : 'Nothing to undo'} arrow>
+                <span>
+                  <IconButton
+                    size="small"
+                    onClick={undo}
+                    disabled={!canUndo}
+                    sx={{ color: 'text.disabled', borderRadius: 1 }}
+                  >
+                    <UndoIcon sx={{ fontSize: 16 }} />
+                  </IconButton>
+                </span>
+              </Tooltip>
+              <Tooltip title={canRedo ? 'Redo (Ctrl+Shift+Z)' : 'Nothing to redo'} arrow>
+                <span>
+                  <IconButton
+                    size="small"
+                    onClick={redo}
+                    disabled={!canRedo}
+                    sx={{ color: 'text.disabled', borderRadius: 1 }}
+                  >
+                    <RedoIcon sx={{ fontSize: 16 }} />
+                  </IconButton>
+                </span>
+              </Tooltip>
             </Box>
           </>
         )}
@@ -466,6 +521,7 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
                 onUpdate={updates => updateWidget(selectedWidget.id, updates)}
                 onGeometry={geom => updateWidgetGeometry(selectedWidget.id, geom)}
                 onRemove={() => handleRemove(selectedWidget.id)}
+                onDuplicate={() => handleDuplicate(selectedWidget.id)}
               />
             ) : (
               <CanvasProperties

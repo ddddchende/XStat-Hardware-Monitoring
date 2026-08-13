@@ -9,6 +9,7 @@ import FormatAlignLeftIcon   from '@mui/icons-material/FormatAlignLeft'
 import FormatAlignCenterIcon from '@mui/icons-material/FormatAlignCenter'
 import FormatAlignRightIcon  from '@mui/icons-material/FormatAlignRight'
 import DeleteOutlineIcon     from '@mui/icons-material/DeleteOutline'
+import ContentCopyIcon       from '@mui/icons-material/ContentCopy'
 import CodeIcon              from '@mui/icons-material/Code'
 import ImageIcon                    from '@mui/icons-material/Image'
 import KeyboardDoubleArrowUpIcon    from '@mui/icons-material/KeyboardDoubleArrowUp'
@@ -90,6 +91,7 @@ interface Props {
   onUpdate: (updates: Partial<PanelWidget>) => void
   onGeometry?: (geom: Partial<Omit<LayoutItem, 'i'>>) => void
   onRemove: () => void
+  onDuplicate?: () => void
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
@@ -259,7 +261,7 @@ const isSensorWidget = (w: PanelWidget) =>
 const hasRange = (w: PanelWidget) =>
   w.type === 'SensorBar' || w.type === 'SensorGauge'
 
-export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, allWidgets, onUpdate, onGeometry, onRemove }) => {
+export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, allWidgets, onUpdate, onGeometry, onRemove, onDuplicate }) => {
   const theme = useTheme()
   const sensors = snapshot?.sensors ?? []
   const [sensorDialogOpen, setSensorDialogOpen] = useState(false)
@@ -328,17 +330,32 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
             </Typography>
           </Tooltip>
         )}
-        <Tooltip title="Delete widget" arrow>
-          <Box
-            onClick={onRemove}
-            sx={{
-              p: 0.5, borderRadius: 1, cursor: 'pointer', color: 'error.main',
-              '&:hover': { background: alpha(theme.palette.error.main, 0.1) },
-            }}
-          >
-            <DeleteOutlineIcon fontSize="small" />
-          </Box>
-        </Tooltip>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25 }}>
+          {onDuplicate && (
+            <Tooltip title="Duplicate widget" arrow>
+              <Box
+                onClick={onDuplicate}
+                sx={{
+                  p: 0.5, borderRadius: 1, cursor: 'pointer', color: 'text.secondary',
+                  '&:hover': { background: alpha(theme.palette.primary.main, 0.12), color: 'primary.main' },
+                }}
+              >
+                <ContentCopyIcon fontSize="small" />
+              </Box>
+            </Tooltip>
+          )}
+          <Tooltip title="Delete widget" arrow>
+            <Box
+              onClick={onRemove}
+              sx={{
+                p: 0.5, borderRadius: 1, cursor: 'pointer', color: 'error.main',
+                '&:hover': { background: alpha(theme.palette.error.main, 0.1) },
+              }}
+            >
+              <DeleteOutlineIcon fontSize="small" />
+            </Box>
+          </Tooltip>
+        </Box>
       </Box>
 
       <Divider />

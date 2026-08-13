@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useReducer, useEffect } from 'react'
 import type { PanelLayout, PanelWidget, LayoutItem, WidgetType } from '@/types/panel'
 import { WIDGET_DEFAULTS } from '@/types/panel'
 
@@ -160,7 +160,63 @@ function loadState(): PanelsState {
 }
 
 export function usePanelLayout() {
-  const [state, setState] = useState<PanelsState>(loadState)
+  // Undo/redo model: present = current PanelsState; past = prior snapshots
+  // (undo source); future = snapshots undone but re-doable (redo source).
+  // Only editing operations push to past; switching active panel is navigation
+  // and does not record history (so undo targets the most recent edit, not view jumps).
+  type UndoState = { present: PanelsState; past: PanelsState[]; future: PanelsState[] }
+
+  type Action =
+    | { type: 'COMMIT'; updater: (s: PanelsState) => PanelsState }
+    | { type: 'NAV'; activePanelId: string }
+    | { type: 'UNDO' }
+    | { type: 'REDO' }
+
+  const HISTORY_LIMIT = 100
+
+  function reducer(state: UndoState, action: Action): UndoState {
+    switch (action.type) {
+      case 'COMMIT': {
+        const next = action.updater(state.present)
+        if (next === state.present) return state
+        // A new edit clears the redo future (standard undo/redo semantics).
+        return {
+          present: next,
+          past: [...state.past, state.present].slice(-HISTORY_LIMIT),
+          future: [],
+        }
+      }
+      case 'NAV':
+        return { ...state, present: { ...state.present, activePanelId: action.activePanelId } }
+      case 'UNDO': {
+        if (state.past.length === 0) return state
+        const previous = state.past[state.past.length - 1]
+        return {
+          present: previous,
+          past: state.past.slice(0, -1),
+          future: [state.present, ...state.future].slice(0, HISTORY_LIMIT),
+        }
+      }
+      case 'REDO': {
+        if (state.future.length === 0) return state
+        const next = state.future[0]
+        return {
+          present: next,
+          past: [...state.past, state.present].slice(-HISTORY_LIMIT),
+          future: state.future.slice(1),
+        }
+      }
+      default:
+        return state
+    }
+  }
+
+  const [undoState, dispatch] = useReducer(reducer, undefined, () => ({
+    present: loadState(),
+    past: [],
+    future: [],
+  }))
+  const state = undoState.present
 
   // Persist on every state change, and push the active panel to the local service
   // so the LAN web panel can display it.
@@ -173,9 +229,24 @@ export function usePanelLayout() {
   const activePanel =
     state.panels.find(p => p.id === state.activePanelId) ?? state.panels[0]
 
+  // Wrap an updater as a history-recording commit.
+  function commit(updater: (s: PanelsState) => PanelsState) {
+    dispatch({ type: 'COMMIT', updater })
+  }
+
+  const canUndo = undoState.past.length > 0
+  function undo() {
+    dispatch({ type: 'UNDO' })
+  }
+
+  const canRedo = undoState.future.length > 0
+  function redo() {
+    dispatch({ type: 'REDO' })
+  }
+
   // ── Layout ────────────────────────────────────────────────────────────────
   function updateLayout(layout: LayoutItem[]) {
-    setState(s => ({
+    commit(s => ({
       ...s,
       panels: s.panels.map(p =>
         p.id === activePanel.id ? { ...p, layout } : p
@@ -193,7 +264,7 @@ export function usePanelLayout() {
     const y = 10 + (n % 8) * 20
     const item: LayoutItem = { i: widget.id, x, y, w, h }
 
-    setState(s => ({
+    commit(s => ({
       ...s,
       panels: s.panels.map(p =>
         p.id === activePanel.id
@@ -205,7 +276,7 @@ export function usePanelLayout() {
   }
 
   function updateWidget(widgetId: string, updates: Partial<PanelWidget>) {
-    setState(s => ({
+    commit(s => ({
       ...s,
       panels: s.panels.map(p =>
         p.id === activePanel.id
@@ -216,7 +287,7 @@ export function usePanelLayout() {
   }
 
   function removeWidget(widgetId: string) {
-    setState(s => ({
+    commit(s => ({
       ...s,
       panels: s.panels.map(p =>
         p.id === activePanel.id
@@ -230,8 +301,46 @@ export function usePanelLayout() {
     }))
   }
 
+  // Clone a widget (new UUID) and offset its layout position by 20px.
+  // Returns the new widget's id, or null if the source widget was not found.
+  function duplicateWidget(widgetId: string): string | null {
+    const sourceWidget = activePanel.widgets.find(w => w.id === widgetId)
+    const sourceLayout = activePanel.layout.find(l => l.i === widgetId)
+    if (!sourceWidget || !sourceLayout) return null
+
+    const newId = crypto.randomUUID()
+    // Deep-clone widget props (customFiles / nested records shouldn't be shared by ref)
+    const clonedWidget: PanelWidget = {
+      ...sourceWidget,
+      id: newId,
+      ...(sourceWidget.customFiles
+        ? { customFiles: { ...sourceWidget.customFiles } }
+        : {}),
+    }
+    const clonedLayout: LayoutItem = {
+      ...sourceLayout,
+      i: newId,
+      x: sourceLayout.x + 20,
+      y: sourceLayout.y + 20,
+    }
+
+    commit(s => ({
+      ...s,
+      panels: s.panels.map(p =>
+        p.id === activePanel.id
+          ? {
+              ...p,
+              widgets: [...p.widgets, clonedWidget],
+              layout: [...p.layout, clonedLayout],
+            }
+          : p
+      ),
+    }))
+    return newId
+  }
+
   function updateWidgetGeometry(widgetId: string, geom: Partial<Omit<LayoutItem, 'i'>>) {
-    setState(s => ({
+    commit(s => ({
       ...s,
       panels: s.panels.map(p =>
         p.id === activePanel.id
@@ -244,11 +353,11 @@ export function usePanelLayout() {
   // ── Panels ────────────────────────────────────────────────────────────────
   function createPanel(name: string) {
     const panel = { ...makeDefaultPanel(), id: crypto.randomUUID(), name }
-    setState(s => ({ panels: [...s.panels, panel], activePanelId: panel.id }))
+    commit(s => ({ panels: [...s.panels, panel], activePanelId: panel.id }))
   }
 
   function deletePanel(id: string) {
-    setState(s => {
+    commit(s => {
       const remaining = s.panels.filter(p => p.id !== id)
       // Always keep at least one panel
       if (remaining.length === 0) {
@@ -261,7 +370,7 @@ export function usePanelLayout() {
   }
 
   function renamePanel(name: string) {
-    setState(s => ({
+    commit(s => ({
       ...s,
       panels: s.panels.map(p =>
         p.id === activePanel.id ? { ...p, name } : p
@@ -270,11 +379,11 @@ export function usePanelLayout() {
   }
 
   function setActivePanel(id: string) {
-    setState(s => ({ ...s, activePanelId: id }))
+    dispatch({ type: 'NAV', activePanelId: id })
   }
 
   function updateCanvasBackground(color: string) {
-    setState(s => ({
+    commit(s => ({
       ...s,
       panels: s.panels.map(p =>
         p.id === activePanel.id ? { ...p, canvasBackground: color } : p
@@ -283,7 +392,7 @@ export function usePanelLayout() {
   }
 
   function updateCanvasSettings(updates: { canvasBackground?: string; canvasBackgroundImage?: string | null; canvasShowGrid?: boolean; canvasGridColor?: string }) {
-    setState(s => ({
+    commit(s => ({
       ...s,
       panels: s.panels.map(p =>
         p.id === activePanel.id ? { ...p, ...updates } : p
@@ -292,7 +401,7 @@ export function usePanelLayout() {
   }
 
   function updateCanvasSize(canvasWidth: number, canvasHeight: number) {
-    setState(s => ({
+    commit(s => ({
       ...s,
       panels: s.panels.map(p =>
         p.id === activePanel.id ? { ...p, canvasWidth, canvasHeight } : p
@@ -314,7 +423,7 @@ export function usePanelLayout() {
       panel.canvasWidth  = panel.canvasWidth  ?? 800
       panel.canvasHeight = panel.canvasHeight ?? 600
       panel.canvasShowGrid = panel.canvasShowGrid ?? true
-      setState(s => ({ panels: [...s.panels, panel], activePanelId: panel.id }))
+      commit(s => ({ panels: [...s.panels, panel], activePanelId: panel.id }))
       return true
     } catch {
       return false
@@ -328,6 +437,7 @@ export function usePanelLayout() {
     addWidget,
     updateWidget,
     removeWidget,
+    duplicateWidget,
     updateWidgetGeometry,
     createPanel,
     deletePanel,
@@ -338,5 +448,9 @@ export function usePanelLayout() {
     updateCanvasSize,
     exportPanel,
     importPanel,
+    undo,
+    canUndo,
+    redo,
+    canRedo,
   }
 }

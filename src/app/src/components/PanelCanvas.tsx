@@ -192,9 +192,8 @@ export const PanelCanvas: React.FC<Props> = ({
 
   return (
     <Box
-      onClick={e => { if (e.target === e.currentTarget) onSelect(null) }}
+      onClick={e => { if (e.target === e.currentTarget) { onSelect(null); onCanvasSelect?.() } }}
       onMouseDown={e => { if (e.button === 0 && e.target === e.currentTarget) onPanStart?.(e) }}
-      onContextMenu={e => { if (e.target === e.currentTarget) { e.preventDefault(); onCanvasSelect?.() } }}
       sx={{
         position: 'relative',
         width: panel.canvasWidth,
@@ -260,15 +259,15 @@ export const PanelCanvas: React.FC<Props> = ({
           >
             <WidgetRenderer widget={widget} snapshot={snapshot} history={history} />
 
-            {/* Transparent overlay in edit mode — left-click drags, right-click selects */}
+            {/* Transparent overlay in edit mode — left-click selects + drags */}
             {isEditMode && (
               <Box
                 onMouseDown={e => {
-                  if (e.button === 0) startMove(e, widget.id)
-                }}
-                onContextMenu={e => {
-                  e.preventDefault()
-                  onSelect(widget.id)
+                  if (e.button === 0) {
+                    // Left-click selects first, then starts a drag.
+                    onSelect(widget.id)
+                    startMove(e, widget.id)
+                  }
                 }}
                 sx={{
                   position: 'absolute', inset: 0,
