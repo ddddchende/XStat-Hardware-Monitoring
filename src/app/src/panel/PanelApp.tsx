@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { PanelCanvas }      from '@/components/PanelCanvas'
 import { useSensorHistory } from '@/hooks/useSensorHistory'
 import { usePanelSensors }  from './usePanelSensors'
@@ -59,6 +59,8 @@ const GettingStarted: React.FC<{ loading: boolean }> = ({ loading }) => (
 export const PanelApp: React.FC = () => {
   const { snapshot, layoutJson } = usePanelSensors()
   const history = useSensorHistory(snapshot)
+  const hostRef  = useRef<HTMLDivElement>(null)
+  const [fit, setFit] = useState(1)
 
   const panel = useMemo<PanelLayout>(() => {
     if (!layoutJson) return EMPTY_PANEL
@@ -69,23 +71,65 @@ export const PanelApp: React.FC = () => {
     }
   }, [layoutJson])
 
+  // Auto-fit: scale the fixed-size canvas to the viewport ("contain"), so the
+  // whole panel is always visible on phones / tablets / TVs without scrolling.
+  // Zoom is intentionally locked — the LAN display is meant to fill the screen.
+  useEffect(() => {
+    if (!layoutJson || panel.widgets.length === 0) return
+    const compute = () => {
+      const host = hostRef.current
+      if (!host) return
+      const s = Math.min(
+        host.clientWidth  / panel.canvasWidth,
+        host.clientHeight / panel.canvasHeight,
+      )
+      setFit(Math.max(0.05, Math.min(4, s)))
+    }
+    compute()
+    const ro = new ResizeObserver(compute)
+    if (hostRef.current) ro.observe(hostRef.current)
+    window.addEventListener('resize', compute)
+    return () => {
+      ro.disconnect()
+      window.removeEventListener('resize', compute)
+    }
+  }, [layoutJson, panel.canvasWidth, panel.canvasHeight, panel.widgets.length])
+
   // Show guidance when: still loading (no layoutJson) or panel received but empty
   if (!layoutJson || panel.widgets.length === 0) {
     return <GettingStarted loading={!layoutJson} />
   }
 
   return (
-    <div style={{ position: 'fixed', inset: 0, overflow: 'hidden', background: panel.canvasBackground }}>
-      <PanelCanvas
-        panel={panel}
-        snapshot={snapshot}
-        history={history}
-        isEditMode={false}
-        snapToGrid={false}
-        selectedWidgetId={null}
-        onSelect={() => {}}
-        onWidgetGeometry={() => {}}
-      />
+    <div
+      ref={hostRef}
+      style={{
+        position: 'fixed', inset: 0, overflow: 'hidden',
+        background: panel.canvasBackground,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}
+    >
+      <div
+        style={{
+          width: panel.canvasWidth,
+          height: panel.canvasHeight,
+          flexShrink: 0,
+          transform: `scale(${fit})`,
+          // Zoom is locked: no browser pinch/double-tap zoom on the panel.
+          touchAction: 'pan-x pan-y',
+        }}
+      >
+        <PanelCanvas
+          panel={panel}
+          snapshot={snapshot}
+          history={history}
+          isEditMode={false}
+          snapToGrid={false}
+          selectedWidgetId={null}
+          onSelect={() => {}}
+          onWidgetGeometry={() => {}}
+        />
+      </div>
     </div>
   )
 }
