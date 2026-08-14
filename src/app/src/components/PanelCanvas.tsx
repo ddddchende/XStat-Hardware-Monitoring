@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react'
+import React, { useRef, useEffect, useMemo } from 'react'
 import { Box, alpha, useTheme } from '@mui/material'
 import type { PanelLayout, LayoutItem } from '@/types/panel'
 import type { HardwareSnapshot } from '@/types/sensors'
@@ -141,6 +141,8 @@ interface Props {
   smartAlign?: boolean
   selectedWidgetIds: string[]
   onSelect: (id: string | null, additive?: boolean) => void
+  /** Select a whole widget group at once (click on any member). */
+  onSelectGroup?: (ids: string[]) => void
   onWidgetGeometries: (updates: GeomUpdate[]) => void
   onPanStart?: (e: React.MouseEvent) => void
   onCanvasSelect?: () => void
@@ -159,6 +161,7 @@ export const PanelCanvas: React.FC<Props> = ({
   smartAlign = true,
   selectedWidgetIds,
   onSelect,
+  onSelectGroup,
   onWidgetGeometries,
   onPanStart,
   onCanvasSelect,
@@ -176,6 +179,7 @@ export const PanelCanvas: React.FC<Props> = ({
   const zoomRef   = useRef(zoom ?? 1)
   const vGuideRef = useRef<HTMLDivElement | null>(null)
   const hGuideRef = useRef<HTMLDivElement | null>(null)
+  const groupFrameRef = useRef<HTMLDivElement | null>(null)
   const canvasSizeRef = useRef({ w: panel.canvasWidth, h: panel.canvasHeight })
   useEffect(() => { layoutRef.current = panel.layout },   [panel.layout])
   useEffect(() => { geoRef.current    = onWidgetGeometries }, [onWidgetGeometries])
@@ -188,6 +192,31 @@ export const PanelCanvas: React.FC<Props> = ({
   // widgets render with the exact typeface the desktop user picked (esp. LAN
   // browsers that don't have custom/Chinese fonts installed).
   useEffect(() => { ensurePanelFonts(panel.widgets) }, [panel.widgets])
+
+  // groupId → member widget ids, so a click on any member drags the whole group.
+  const groupMembersById = useMemo(() => {
+    const map = new Map<string, string[]>()
+    for (const w of panel.widgets) {
+      if (!w.groupId) continue
+      const list = map.get(w.groupId) ?? []
+      list.push(w.id)
+      map.set(w.groupId, list)
+    }
+    return map
+  }, [panel.widgets])
+
+  // A group whose members are exactly the current selection → draw one parent
+  // outline around the whole group instead of per-member boxes.
+  const fullySelectedGroup = useMemo(() => {
+    if (selectedWidgetIds.length < 2) return null
+    const selectedSet = new Set(selectedWidgetIds)
+    for (const [gid, members] of groupMembersById) {
+      if (members.length === selectedWidgetIds.length && members.every(m => selectedSet.has(m))) {
+        return { id: gid, members }
+      }
+    }
+    return null
+  }, [selectedWidgetIds, groupMembersById])
 
   // DOM geometry helpers — written inline during drags for zero React re-renders
   function setGeom(id: string, x: number, y: number, w: number, h: number) {
@@ -237,14 +266,51 @@ export const PanelCanvas: React.FC<Props> = ({
         let vGuide: number | null = null
         let hGuide: number | null = null
         if (alignRef.current) {
-          // Snap against everything NOT being dragged (incl. canvas edges/center)
           const dragging = new Set([op.id, ...(op.group?.map(g => g.id) ?? [])])
-          const others = layoutRef.current.filter(l => !dragging.has(l.i))
-          const snap = smartSnap(x, y, op.ow, op.oh, others, op.id, canvasSizeRef.current.w, canvasSizeRef.current.h)
-          x = snap.x
-          y = snap.y
-          vGuide = snap.vGuide
-          hGuide = snap.hGuide
+          if (op.group && op.group.length > 1) {
+            // ── Group drag: snap the group's bounding frame, preferring other
+            // group frames as targets; member widgets are not alignment points.
+            const cur = op.group.map(g => ({ x: g.x + dxm, y: g.y + dym, w: g.w, h: g.h }))
+            const gx = Math.min(...cur.map(m => m.x))
+            const gy = Math.min(...cur.map(m => m.y))
+            const gw = Math.max(...cur.map(m => m.x + m.w)) - gx
+            const gh = Math.max(...cur.map(m => m.y + m.h)) - gy
+
+            const targets: { i: string; x: number; y: number; w: number; h: number }[] = []
+            // Other group frames (skip groups that share a dragged member)
+            for (const [gid, ids] of groupMembersById) {
+              if (ids.some(id => dragging.has(id))) continue
+              const items = ids.map(id => layoutRef.current.find(l => l.i === id)).filter((l): l is LayoutItem => !!l)
+              if (items.length < 2) continue
+              const tx = Math.min(...items.map(l => l.x))
+              const ty = Math.min(...items.map(l => l.y))
+              const tw = Math.max(...items.map(l => l.x + l.w)) - tx
+              const th = Math.max(...items.map(l => l.y + l.h)) - ty
+              targets.push({ i: `frame-${gid}`, x: tx, y: ty, w: tw, h: th })
+            }
+            // Ungrouped widgets still snap normally
+            for (const w of panel.widgets) {
+              if (w.groupId || dragging.has(w.id)) continue
+              const it = layoutRef.current.find(l => l.i === w.id)
+              if (it) targets.push({ i: `w-${w.id}`, x: it.x, y: it.y, w: it.w, h: it.h })
+            }
+
+            const snap = smartSnap(gx, gy, gw, gh, targets, '__group__', canvasSizeRef.current.w, canvasSizeRef.current.h)
+            const gddx = snap.x - gx
+            const gddy = snap.y - gy
+            x = op.ox + dxm + gddx
+            y = op.oy + dym + gddy
+            vGuide = snap.vGuide
+            hGuide = snap.hGuide
+          } else {
+            // ── Single-widget drag: snap against everything NOT being dragged ──
+            const others = layoutRef.current.filter(l => !dragging.has(l.i))
+            const snap = smartSnap(x, y, op.ow, op.oh, others, op.id, canvasSizeRef.current.w, canvasSizeRef.current.h)
+            x = snap.x
+            y = snap.y
+            vGuide = snap.vGuide
+            hGuide = snap.hGuide
+          }
           // While axis-locked, never let smart-snap shift the locked axis
           if (lock === 'x') y = op.oy + dym
           if (lock === 'y') x = op.ox + dxm
@@ -271,6 +337,25 @@ export const PanelCanvas: React.FC<Props> = ({
         if (hg) {
           if (hGuide !== null) { hg.style.display = 'block'; hg.style.top = `${hGuide}px` }
           else hg.style.display = 'none'
+        }
+
+        // Keep the group's parent frame glued to the dragged members (DOM-direct,
+        // like setGeom, so it follows without a React re-render).
+        const frame = groupFrameRef.current
+        if (frame && op.group && op.group.length > 1) {
+          const pts: { x: number; y: number; w: number; h: number }[] = []
+          for (const g of op.group) {
+            const f = final.get(g.id)
+            pts.push(f ? { x: f.x, y: f.y, w: g.w, h: g.h } : { x: g.x, y: g.y, w: g.w, h: g.h })
+          }
+          const gx = Math.min(...pts.map(p => p.x))
+          const gy = Math.min(...pts.map(p => p.y))
+          const gw = Math.max(...pts.map(p => p.x + p.w)) - gx
+          const gh = Math.max(...pts.map(p => p.y + p.h)) - gy
+          frame.style.left = `${gx}px`
+          frame.style.top = `${gy}px`
+          frame.style.width = `${gw}px`
+          frame.style.height = `${gh}px`
         }
         return
       }
@@ -456,6 +541,9 @@ export const PanelCanvas: React.FC<Props> = ({
         const item     = panel.layout.find(l => l.i === widget.id)
         if (!item) return null
         const selected = selectedWidgetIds.includes(widget.id)
+        // When the whole group is selected, members drop their own outline and the
+        // group gets a single parent frame instead.
+        const groupSelected = !!fullySelectedGroup && fullySelectedGroup.members.includes(widget.id)
 
         return (
           <Box
@@ -472,12 +560,14 @@ export const PanelCanvas: React.FC<Props> = ({
               cursor: 'default',
               // Selection / hover outlines
               outline: isEditMode
-                ? selected
-                  ? `2px solid ${theme.palette.primary.main}`
-                  : `1px dashed ${alpha('#ffffff', 0.13)}`
+                ? groupSelected
+                  ? 'none'
+                  : selected
+                    ? `2px solid ${theme.palette.primary.main}`
+                    : `1px dashed ${alpha('#ffffff', 0.13)}`
                 : 'none',
-              outlineOffset: selected ? 1 : 0,
-              '&:hover': isEditMode && !selected
+              outlineOffset: !groupSelected && selected ? 1 : 0,
+              '&:hover': isEditMode && !selected && !groupSelected
                 ? { outline: `1px dashed ${alpha(theme.palette.primary.main, 0.55)}` }
                 : {},
             }}
@@ -512,9 +602,16 @@ export const PanelCanvas: React.FC<Props> = ({
                     startMove(e, widget.id, selectedWidgetIds)
                     return
                   }
-                  // Plain click on an unselected widget → select it alone & drag
-                  onSelect(widget.id, false)
-                  startMove(e, widget.id, [widget.id])
+                  // Plain click on an unselected widget: a grouped member selects and
+                  // drags the whole group; otherwise select and drag it alone.
+                  if (widget.groupId) {
+                    const members = groupMembersById.get(widget.groupId) ?? [widget.id]
+                    onSelectGroup?.(members)
+                    startMove(e, widget.id, members)
+                  } else {
+                    onSelect(widget.id, false)
+                    startMove(e, widget.id, [widget.id])
+                  }
                 }}
                 sx={{
                   position: 'absolute', inset: 0,
@@ -548,6 +645,31 @@ export const PanelCanvas: React.FC<Props> = ({
           </Box>
         )
       })}
+
+      {/* Parent frame around a fully-selected group — one box instead of per-member outlines */}
+      {isEditMode && fullySelectedGroup && (() => {
+        const items = fullySelectedGroup.members
+          .map(id => panel.layout.find(l => l.i === id))
+          .filter((l): l is LayoutItem => !!l)
+        if (items.length < 2) return null
+        const gx = Math.min(...items.map(l => l.x))
+        const gy = Math.min(...items.map(l => l.y))
+        const gw = Math.max(...items.map(l => l.x + l.w)) - gx
+        const gh = Math.max(...items.map(l => l.y + l.h)) - gy
+        return (
+          <Box
+            ref={groupFrameRef}
+            sx={{
+              position: 'absolute',
+              left: gx, top: gy, width: gw, height: gh,
+              border: `2px solid ${theme.palette.primary.main}`,
+              borderRadius: 1,
+              pointerEvents: 'none',
+              zIndex: 30,
+            }}
+          />
+        )
+      })()}
 
       {/* Smart alignment guides — shown while dragging to align with other widgets */}
       {isEditMode && (

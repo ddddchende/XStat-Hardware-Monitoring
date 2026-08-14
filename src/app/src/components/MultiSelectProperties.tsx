@@ -3,15 +3,24 @@ import { Box, Typography, Divider, Button, alpha, useTheme } from '@mui/material
 import { useTranslation } from 'react-i18next'
 import ContentCopyIcon     from '@mui/icons-material/ContentCopy'
 import DeleteOutlineIcon   from '@mui/icons-material/DeleteOutline'
+import GroupWorkIcon       from '@mui/icons-material/GroupWork'
+import DownloadIcon        from '@mui/icons-material/Download'
+import GroupRemoveIcon     from '@mui/icons-material/GroupRemove'
 
 interface Props {
   count: number
   onDuplicate: () => void
   onRemove: () => void
+  onGroup: () => void
+  // Set when the current selection is exactly a whole group → show group actions.
+  groupId?: string
+  onDuplicateGroup?: (groupId: string) => void
+  onExportGroup?: (groupId: string) => void
+  onUngroup?: (groupId: string) => void
 }
 
 // Shown in the properties panel when several widgets are selected at once.
-export const MultiSelectProperties: React.FC<Props> = ({ count, onDuplicate, onRemove }) => {
+export const MultiSelectProperties: React.FC<Props> = ({ count, onDuplicate, onRemove, onGroup, groupId, onDuplicateGroup, onExportGroup, onUngroup }) => {
   const theme = useTheme()
   const { t } = useTranslation()
 
@@ -26,6 +35,46 @@ export const MultiSelectProperties: React.FC<Props> = ({ count, onDuplicate, onR
 
       <Divider sx={{ my: 0.5 }} />
 
+      {groupId ? (
+        <>
+          <Typography variant="caption" sx={{ color: 'primary.light', fontWeight: 600 }}>
+            {t('panelEditor.group')} · {t('panelEditor.groupMembers', { count })}
+          </Typography>
+          <Button
+            size="small"
+            startIcon={<ContentCopyIcon sx={{ fontSize: 16 }} />}
+            onClick={() => onDuplicateGroup?.(groupId)}
+            sx={{ justifyContent: 'flex-start', textTransform: 'none' }}
+          >
+            {t('panelEditor.duplicateGroup')}
+          </Button>
+          <Button
+            size="small"
+            startIcon={<DownloadIcon sx={{ fontSize: 16 }} />}
+            onClick={() => onExportGroup?.(groupId)}
+            sx={{ justifyContent: 'flex-start', textTransform: 'none' }}
+          >
+            {t('panelEditor.exportGroup')}
+          </Button>
+          <Button
+            size="small"
+            startIcon={<GroupRemoveIcon sx={{ fontSize: 16 }} />}
+            onClick={() => onUngroup?.(groupId)}
+            sx={{ justifyContent: 'flex-start', textTransform: 'none' }}
+          >
+            {t('panelEditor.ungroup')}
+          </Button>
+        </>
+      ) : (
+        <Button
+          size="small"
+          startIcon={<GroupWorkIcon sx={{ fontSize: 16 }} />}
+          onClick={onGroup}
+          sx={{ justifyContent: 'flex-start', textTransform: 'none' }}
+        >
+          {t('panelEditor.groupSelected')}
+        </Button>
+      )}
       <Button
         size="small"
         startIcon={<ContentCopyIcon sx={{ fontSize: 16 }} />}

@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback, useEffect } from 'react'
+import React, { useRef, useState, useCallback, useEffect, useMemo } from 'react'
 import {
   Box, Typography, Divider, Tooltip, IconButton, TextField,
   Menu, MenuItem, alpha, useTheme, Chip, Button, Select, FormControl, InputLabel,
@@ -29,7 +29,7 @@ import { CanvasProperties }  from '@/components/CanvasProperties'
 import { MultiSelectProperties } from '@/components/MultiSelectProperties'
 import { PanelCanvas }       from '@/components/PanelCanvas'
 import type { HardwareSnapshot } from '@/types/sensors'
-import type { WidgetType, PanelWidget, PanelLayout } from '@/types/panel'
+import type { WidgetType, PanelWidget, PanelLayout, LayoutItem } from '@/types/panel'
 
 interface PanelEditorProps {
   snapshot: HardwareSnapshot | null
@@ -44,6 +44,7 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
     panels, activePanel,
     updateLayout, addWidget, updateWidget, removeWidgets, duplicateWidgets, importWidget,
     updateWidgetGeometries, updateWidgetGeometry, updateCanvasSize,
+    groupWidgets, ungroupWidgets, duplicateGroup, exportGroup, importGroup,
     createPanel, deletePanel, renamePanel, setActivePanel,
     updateCanvasBackground, updateCanvasSettings,
     exportWorkspace, loadWorkspace,
@@ -193,6 +194,24 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
   const selectedWidgets = activePanel.widgets.filter(w => selectedWidgetIds.includes(w.id))
   const selectedWidget = selectedWidgets.length === 1 ? selectedWidgets[0] : null
 
+  // When the current selection is exactly the full member set of one group, report
+  // its groupId so the multi-select panel can show group actions (duplicate/export/ungroup).
+  const selectedGroupId = useMemo(() => {
+    if (selectedWidgetIds.length < 2) return null
+    const groupMap = new Map<string, string[]>()
+    for (const w of activePanel.widgets) {
+      if (!w.groupId) continue
+      const list = groupMap.get(w.groupId) ?? []
+      list.push(w.id)
+      groupMap.set(w.groupId, list)
+    }
+    const selectedSet = new Set(selectedWidgetIds)
+    for (const [gid, members] of groupMap) {
+      if (members.length === selectedWidgetIds.length && members.every(m => selectedSet.has(m))) return gid
+    }
+    return null
+  }, [selectedWidgetIds, activePanel.widgets])
+
   // ── Handlers ────────────────────────────────────────────────────────────
   // Canvas selection: id === null clears the selection (empty canvas click).
   // additive (Ctrl/Cmd) toggles membership; otherwise replaces the selection.
@@ -338,6 +357,41 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
   function handleImportWidget(data: { version?: number; widget: PanelWidget }) {
     const id = importWidget(data)
     if (id) setSelectedWidgetIds([id])
+  }
+
+  // ── Group handlers ──────────────────────────────────────────────────
+  function handleGroupSelected() {
+    groupWidgets(selectedWidgetIds)
+  }
+
+  function handleSelectGroup(groupId: string) {
+    const ids = activePanel.widgets.filter(w => w.groupId === groupId).map(w => w.id)
+    setSelectedWidgetIds(ids)
+  }
+
+  function handleUngroup(groupId: string) {
+    ungroupWidgets(groupId)
+  }
+
+  function handleDuplicateGroup(groupId: string) {
+    const newIds = duplicateGroup(groupId)
+    if (newIds.length) setSelectedWidgetIds(newIds)
+  }
+
+  function handleExportGroup(groupId: string) {
+    const data = exportGroup(groupId)
+    const blob = new Blob([data], { type: 'application/json' })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a')
+    a.href     = url
+    a.download = 'xstat-group.xstatgroup'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  function handleImportGroup(data: { version?: number; widgets?: PanelWidget[]; layouts?: LayoutItem[] }) {
+    const ids = importGroup(data)
+    if (ids.length) setSelectedWidgetIds(ids)
   }
 
   function startRename() {
@@ -650,7 +704,7 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
               py: 0.5,
             }}
           >
-            <WidgetPalette onAdd={handleAddWidget} onImportWidget={handleImportWidget} />
+            <WidgetPalette onAdd={handleAddWidget} onImportWidget={handleImportWidget} onImportGroup={handleImportGroup} />
           </Box>
         )}
 
@@ -704,6 +758,7 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
               locked={canvasLocked}
               selectedWidgetIds={selectedWidgetIds}
               onSelect={handleSelect}
+              onSelectGroup={ids => setSelectedWidgetIds(ids)}
               onWidgetGeometries={updateWidgetGeometries}
               onPanStart={handlePanStart}
               onCanvasSelect={handleCanvasSelect}
@@ -725,6 +780,11 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
                 count={selectedWidgets.length}
                 onDuplicate={handleDuplicateSelected}
                 onRemove={handleRemoveSelected}
+                onGroup={handleGroupSelected}
+                groupId={selectedGroupId ?? undefined}
+                onDuplicateGroup={selectedGroupId ? () => handleDuplicateGroup(selectedGroupId) : undefined}
+                onExportGroup={selectedGroupId ? () => handleExportGroup(selectedGroupId) : undefined}
+                onUngroup={selectedGroupId ? () => handleUngroup(selectedGroupId) : undefined}
               />
             ) : selectedWidget ? (
               <WidgetProperties
@@ -736,6 +796,13 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
                 onGeometry={geom => updateWidgetGeometry(selectedWidget.id, geom)}
                 onRemove={() => handleRemove(selectedWidget.id)}
                 onDuplicate={() => handleDuplicate(selectedWidget.id)}
+                groupMemberCount={selectedWidget.groupId
+                  ? activePanel.widgets.filter(w => w.groupId === selectedWidget.groupId).length
+                  : undefined}
+                onSelectGroup={selectedWidget.groupId ? () => handleSelectGroup(selectedWidget.groupId!) : undefined}
+                onUngroup={selectedWidget.groupId ? () => handleUngroup(selectedWidget.groupId!) : undefined}
+                onDuplicateGroup={selectedWidget.groupId ? () => handleDuplicateGroup(selectedWidget.groupId!) : undefined}
+                onExportGroup={selectedWidget.groupId ? () => handleExportGroup(selectedWidget.groupId!) : undefined}
               />
             ) : (
               <CanvasProperties

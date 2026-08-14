@@ -30,6 +30,8 @@ export interface PanelWidget {
   id: string
   type: WidgetType
   widgetName?: string       // user-defined display name
+  /** Widget group — widgets sharing a groupId are moved/copied/exported/imported together. */
+  groupId?: string
   // Sensor binding
   sensorId?: string
   label?: string

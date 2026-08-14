@@ -13,6 +13,8 @@ import FormatAlignRightIcon  from '@mui/icons-material/FormatAlignRight'
 import DeleteOutlineIcon     from '@mui/icons-material/DeleteOutline'
 import ContentCopyIcon       from '@mui/icons-material/ContentCopy'
 import DownloadIcon          from '@mui/icons-material/Download'
+import SelectAllIcon         from '@mui/icons-material/SelectAll'
+import GroupRemoveIcon       from '@mui/icons-material/GroupRemove'
 import CodeIcon              from '@mui/icons-material/Code'
 import ImageIcon                    from '@mui/icons-material/Image'
 import KeyboardDoubleArrowUpIcon    from '@mui/icons-material/KeyboardDoubleArrowUp'
@@ -126,6 +128,12 @@ interface Props {
   onGeometry?: (geom: Partial<Omit<LayoutItem, 'i'>>) => void
   onRemove: () => void
   onDuplicate?: () => void
+  // Group info — present when the selected widget belongs to a group.
+  groupMemberCount?: number
+  onSelectGroup?: () => void
+  onUngroup?: () => void
+  onDuplicateGroup?: () => void
+  onExportGroup?: () => void
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
@@ -318,7 +326,7 @@ const VARIANT_OPTIONS: Record<string, { value: string; labelKey: string }[]> = {
   ],
 }
 
-export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, allWidgets, onUpdate, onGeometry, onRemove, onDuplicate }) => {
+export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, allWidgets, onUpdate, onGeometry, onRemove, onDuplicate, groupMemberCount, onSelectGroup, onUngroup, onDuplicateGroup, onExportGroup }) => {
   const theme = useTheme()
   const { t } = useTranslation()
   const sensors = snapshot?.sensors ?? []
@@ -445,6 +453,57 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
       </Box>
 
       <Divider />
+
+      {/* ── Group ────────────────────────────────────────────────── */}
+      {(groupMemberCount ?? 0) > 0 && (
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+          <SectionLabel>
+            {t('panelEditor.group')} · {t('panelEditor.groupMembers', { count: groupMemberCount })}
+          </SectionLabel>
+          <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+            {onSelectGroup && (
+              <Button
+                size="small"
+                startIcon={<SelectAllIcon sx={{ fontSize: 15 }} />}
+                onClick={onSelectGroup}
+                sx={{ justifyContent: 'flex-start', textTransform: 'none' }}
+              >
+                {t('panelEditor.selectGroup')}
+              </Button>
+            )}
+            {onDuplicateGroup && (
+              <Button
+                size="small"
+                startIcon={<ContentCopyIcon sx={{ fontSize: 15 }} />}
+                onClick={onDuplicateGroup}
+                sx={{ justifyContent: 'flex-start', textTransform: 'none' }}
+              >
+                {t('panelEditor.duplicateGroup')}
+              </Button>
+            )}
+            {onExportGroup && (
+              <Button
+                size="small"
+                startIcon={<DownloadIcon sx={{ fontSize: 15 }} />}
+                onClick={onExportGroup}
+                sx={{ justifyContent: 'flex-start', textTransform: 'none' }}
+              >
+                {t('panelEditor.exportGroup')}
+              </Button>
+            )}
+            {onUngroup && (
+              <Button
+                size="small"
+                startIcon={<GroupRemoveIcon sx={{ fontSize: 15 }} />}
+                onClick={onUngroup}
+                sx={{ justifyContent: 'flex-start', textTransform: 'none' }}
+              >
+                {t('panelEditor.ungroup')}
+              </Button>
+            )}
+          </Box>
+        </Box>
+      )}
 
       {/* ── Position & Size ──────────────────────────────────────── */}
       {layout && onGeometry && (

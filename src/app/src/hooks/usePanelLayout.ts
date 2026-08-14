@@ -443,6 +443,138 @@ export function usePanelLayout() {
     }))
   }
 
+  // ── Groups ────────────────────────────────────────────────────────────────
+
+  // Members of a group in the active panel, in layout order (for deterministic export).
+  function groupMembers(groupId: string): { widget: PanelWidget; item?: LayoutItem }[] {
+    return activePanel.widgets
+      .filter(w => w.groupId === groupId)
+      .map(w => ({ widget: w, item: activePanel.layout.find(l => l.i === w.id) }))
+  }
+
+  // Assign the given widgets a fresh shared group id (no-op when fewer than two).
+  function groupWidgets(widgetIds: string[]): void {
+    const ids = widgetIds.filter(id => activePanel.widgets.some(w => w.id === id))
+    if (ids.length < 2) return
+    const groupId = crypto.randomUUID()
+    commit(s => ({
+      ...s,
+      panels: s.panels.map(p =>
+        p.id === activePanel.id
+          ? { ...p, widgets: p.widgets.map(w => ids.includes(w.id) ? { ...w, groupId } : w) }
+          : p
+      ),
+    }))
+  }
+
+  // Remove the group marker from every member of a group.
+  function ungroupWidgets(groupId: string): void {
+    commit(s => ({
+      ...s,
+      panels: s.panels.map(p =>
+        p.id === activePanel.id
+          ? {
+              ...p,
+              widgets: p.widgets.map(w => w.groupId === groupId ? { ...w, groupId: undefined } : w),
+            }
+          : p
+      ),
+    }))
+  }
+
+  // Duplicate every member of a group (fresh ids + a fresh group id, offset by
+  // 20px) in a single history commit. Returns the new widgets' ids.
+  function duplicateGroup(groupId: string): string[] {
+    const members = groupMembers(groupId)
+    if (members.length === 0) return []
+    const newGroupId = crypto.randomUUID()
+    const created: { widget: PanelWidget; item: LayoutItem }[] = members.map(({ widget, item }) => {
+      const newId = crypto.randomUUID()
+      return {
+        widget: {
+          ...widget,
+          id: newId,
+          groupId: newGroupId,
+          ...(widget.customFiles ? { customFiles: { ...widget.customFiles } } : {}),
+        },
+        item: item
+          ? { ...item, i: newId, x: item.x + 20, y: item.y + 20 }
+          : { i: newId, x: 20, y: 20, w: WIDGET_DEFAULTS[widget.type]?.w ?? 100, h: WIDGET_DEFAULTS[widget.type]?.h ?? 100 },
+      }
+    })
+
+    commit(s => ({
+      ...s,
+      panels: s.panels.map(p =>
+        p.id === activePanel.id
+          ? {
+              ...p,
+              widgets: [...p.widgets, ...created.map(c => c.widget)],
+              layout: [...p.layout, ...created.map(c => c.item)],
+            }
+          : p
+      ),
+    }))
+    return created.map(c => c.widget.id)
+  }
+
+  // Serialize a group (widgets + layouts) for export as a .xstatgroup file.
+  function exportGroup(groupId: string): string {
+    const members = groupMembers(groupId)
+    return JSON.stringify(
+      {
+        version: 1,
+        widgets: members.map(m => m.widget),
+        layouts: members.filter(m => m.item).map(m => m.item),
+      },
+      null, 2,
+    )
+  }
+
+  // Import a group previously exported as .xstatgroup. Assigns fresh ids + a fresh
+  // group id, keeps the members' relative positions, and offsets the whole group to
+  // a default area. Returns the new widgets' ids.
+  function importGroup(data: { version?: number; widgets?: PanelWidget[]; layouts?: LayoutItem[] }): string[] {
+    const srcs = data.widgets ?? []
+    if (srcs.length === 0) return []
+    const srcLayouts = new Map((data.layouts ?? []).map(l => [l.i, l]))
+    const newGroupId = crypto.randomUUID()
+    const n = activePanel.layout.length
+    const created = srcs.map((src, idx) => {
+      const newId = crypto.randomUUID()
+      const srcLayout = srcLayouts.get(src.id)
+      const def = WIDGET_DEFAULTS[src.type] ?? { w: 100, h: 100 }
+      const ox = 10 + (n % 8) * 20
+      const oy = 10 + (n % 8) * 20
+      const item: LayoutItem = srcLayout
+        ? { ...srcLayout, i: newId, x: srcLayout.x + ox, y: srcLayout.y + oy }
+        : { i: newId, x: ox, y: oy + idx * 20, w: def.w, h: def.h }
+      return {
+        widget: {
+          ...src,
+          id: newId,
+          groupId: newGroupId,
+          ...(src.customFiles ? { customFiles: { ...src.customFiles } } : {}),
+        },
+        item,
+      }
+    })
+
+    commit(s => ({
+      ...s,
+      panels: s.panels.map(p =>
+        p.id === activePanel.id
+          ? {
+              ...p,
+              widgets: [...p.widgets, ...created.map(c => c.widget)],
+              layout: [...p.layout, ...created.map(c => c.item)],
+            }
+          : p
+      ),
+    }))
+    return created.map(c => c.widget.id)
+  }
+
   // ── Panels ────────────────────────────────────────────────────────────────
   function createPanel(name: string) {
     const panel = { ...makeDefaultPanel(), id: crypto.randomUUID(), name }
@@ -548,6 +680,11 @@ export function usePanelLayout() {
     importWidget,
     updateWidgetGeometry,
     updateWidgetGeometries,
+    groupWidgets,
+    ungroupWidgets,
+    duplicateGroup,
+    exportGroup,
+    importGroup,
     createPanel,
     deletePanel,
     renamePanel,

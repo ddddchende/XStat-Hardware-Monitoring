@@ -14,8 +14,9 @@ import InfoIcon          from '@mui/icons-material/Info'
 import CategoryIcon      from '@mui/icons-material/Category'
 import ListAltIcon       from '@mui/icons-material/ListAlt'
 import UploadFileIcon    from '@mui/icons-material/UploadFile'
+import FolderCopyIcon    from '@mui/icons-material/FolderCopy'
 import StarIcon           from '@mui/icons-material/Star'
-import type { WidgetType, PanelWidget } from '@/types/panel'
+import type { WidgetType, PanelWidget, LayoutItem } from '@/types/panel'
 import { ICON_CATEGORIES, ICONS, iconToDataUrl } from '@/data/iconLibrary'
 
 interface PaletteItem {
@@ -68,9 +69,10 @@ const CUSTOM_ITEM: PaletteItem = {
 interface Props {
   onAdd: (type: WidgetType, overrides?: Partial<PanelWidget>) => void
   onImportWidget?: (data: { version?: number; widget: PanelWidget }) => void
+  onImportGroup?: (data: { version?: number; widgets?: PanelWidget[]; layouts?: LayoutItem[] }) => void
 }
 
-export const WidgetPalette: React.FC<Props> = ({ onAdd, onImportWidget }) => {
+export const WidgetPalette: React.FC<Props> = ({ onAdd, onImportWidget, onImportGroup }) => {
   const theme = useTheme()
   const { t } = useTranslation()
 
@@ -157,6 +159,44 @@ export const WidgetPalette: React.FC<Props> = ({ onAdd, onImportWidget }) => {
                 try {
                   const data = JSON.parse(reader.result as string)
                   if (data && data.widget) onImportWidget(data)
+                } catch { /* ignore invalid file */ }
+              }
+              reader.readAsText(file)
+              e.target.value = ''
+            }} />
+          </Box>
+        </Box>
+      )}
+
+      {onImportGroup && (
+        <Box sx={{ px: 0.75, mb: 0.5 }}>
+          <Box
+            component="label"
+            sx={{
+              display: 'flex', alignItems: 'center', gap: 1.25,
+              px: 1.25, py: 0.9, borderRadius: 1.5,
+              cursor: 'pointer', color: 'text.secondary',
+              border: '1px solid transparent',
+              transition: 'all 0.15s',
+              '&:hover': {
+                background: alpha(theme.palette.primary.main, 0.1),
+                border: `1px solid ${alpha(theme.palette.primary.main, 0.25)}`,
+                color: 'primary.light',
+              },
+            }}
+          >
+            <FolderCopyIcon sx={{ fontSize: 18 }} />
+            <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.8rem' }}>
+              {t('panelEditor.importGroup')}
+            </Typography>
+            <input type="file" accept=".xstatgroup,.json" hidden onChange={e => {
+              const file = e.target.files?.[0]
+              if (!file) return
+              const reader = new FileReader()
+              reader.onload = () => {
+                try {
+                  const data = JSON.parse(reader.result as string)
+                  if (data && Array.isArray(data.widgets) && data.widgets.length > 0) onImportGroup(data)
                 } catch { /* ignore invalid file */ }
               }
               reader.readAsText(file)
