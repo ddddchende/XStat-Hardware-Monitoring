@@ -1,195 +1,64 @@
-<p align="center">
-  <img src="website-source/images/logo.png" alt="XStat Logo" width="120" />
-</p>
-
-<h1 align="center">XStat — Hardware Monitoring</h1>
+<h1 align="center">XStat 硬件监控（第三方增强版）</h1>
 
 <p align="center">
-  Open-source real-time hardware monitoring and live sensor panel for Windows.
-  <br />
-  Built with Electron, React, ASP.NET Core 9, and an Android companion app.
-</p>
-
-<p align="center">
-  <a href="https://github.com/Inside4ndroid/XStat-Hardware-Monitoring/releases"><img alt="Latest Release" src="https://img.shields.io/github/v/release/Inside4ndroid/XStat-Hardware-Monitoring?color=7c6ef5&style=flat-square" /></a>
-  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-green?style=flat-square" /></a>
-  <a href="https://github.com/Inside4ndroid/XStat-Hardware-Monitoring/issues"><img alt="Issues" src="https://img.shields.io/github/issues/Inside4ndroid/XStat-Hardware-Monitoring?style=flat-square" /></a>
-  <img alt="Platform: Windows" src="https://img.shields.io/badge/platform-Windows-blue?style=flat-square" />
-  <img alt=".NET 9" src="https://img.shields.io/badge/.NET-9-purple?style=flat-square" />
-  <img alt="Android 5.0+" src="https://img.shields.io/badge/Android-5.0%2B-green?style=flat-square&logo=android" />
-</p>
-
-<p align="center">
-  <a href="https://xstat.ddns.net">🌐 Website</a> ·
-  <a href="https://xstat.ddns.net/docs.html#installer">📥 Install</a> ·
-  <a href="https://xstat.ddns.net/docs.html#android">📱 Android App</a> ·
-  <a href="https://xstat.ddns.net/docs.html#dev-setup">🛠 Develop</a> ·
-  <a href="https://xstat.ddns.net/docs.html#arch-overview">🏗 Architecture</a> ·
-  <a href="https://xstat.ddns.net/docs.html#widget-common">🧩 Widgets</a>
+  本仓库 fork 自 <a href="https://github.com/Inside4ndroid/XStat-Hardware-Monitoring">Inside4ndroid/XStat-Hardware-Monitoring</a>
+  （基线 v0.3.0，提交 <code>f3e66f8</code>），在其基础上进行了深度增强。
 </p>
 
 ---
 
-## What is XStat?
+## 本 fork 修改了什么
 
-XStat is a desktop hardware-monitoring application for Windows. It reads live sensor data — CPU temperature, GPU load, RAM usage, fan speeds, clock frequencies, and dozens more — and lets you build beautiful, fully custom display panels.
+### 🟢 硬件传感器（服务端）
 
-Panels run both inside the Electron desktop app **and** as a responsive web page served over your local network so any phone, tablet, or second monitor can show your sensor data in real time.
+- **修复传感器丢失问题**：LibreHardwareMonitorLib 升级至 `0.9.7-pre700`（pre663 的 `Mutexes.Open()` 在部分环境抛 `ArgumentNullException` 导致 `Computer.Open()` 失败、传感器全部无法枚举）；恢复 340+ 路传感器通道（CPU 59 / GPU 42 / 主板 33 / 网络 67 / 内存 58 / 存储 81）
+- **精确物理内存**：Total Physical Memory 改为所有内存条 SPD Capacity 求和（16+16+32=64GB），不再因 Windows 保留内存而少算
+- **快速磁盘活动**：新增每块磁盘的 Activity Time / 读取 / 写入速度传感器，通过 Windows 性能计数器直读（不再走慢速串行 SMART），并按磁盘型号映射硬件名；读写速度按 ≥1 GiB/s 自动在 MB/s 与 GB/s 之间切换
+- **网络总量**：新增汇总所有网卡的上传 / 下载总速度传感器
+- **按需订阅**：SensorHub 新增 `Subscribe(SensorFilter)` / `SubscribeAll()` / `GetHistory()`，SensorBroadcastService 按连接订阅推送匹配传感器，实测单次推送约 50KB → 约 1KB
+- **新增 REST API**：系统信息（CPU/GPU 型号、内存容量/频率、磁盘、系统版本）、自定义控件 HTML（`/api/widget`）、字体、诊断等控制器
 
-The **XStat Android companion app** auto-discovers your PC on the network via UDP broadcast and displays your panel full-screen — zero configuration required. Works on phones, tablets, and Android TV.
+### 🟢 面板编辑器（前端）
 
----
+- **控件复制**：控件复制/粘贴
+- **撤销 / 重做**：Ctrl+Z / Ctrl+Shift+Z，覆盖所有编辑操作的历史记录
+- **智能对齐参考线**：拖动**和**缩放控件时吸附到其他控件的边 / 中心，带总开关
+- **控件成组**：控件分组后整体移动 / 复制 / 导出 / 导入（`.xstatgroup`）；点击组成员即选中整组并显示统一父级框框；组框与组框之间优先对齐，不考虑子控件；成组 / 解组 / 复制组 / 导出组 / 导入组
+- **多选编辑**：框选多控件后批量操作与统一属性编辑
+- **左键选择**：点击即可选中控件
+- **多面板升级**：多面板创建、切换与激活面板推送优化
+- **画布属性**：新增画布级属性配置
 
-## Screenshots
+### 🟢 新增控件
 
-**Dashboard** — live CPU & GPU sensor overview
+- **SVG 图标控件**：容器内渲染任意 SVG 代码，内置代码编辑器与图标颜色设置
+- **系统信息控件**：显示 CPU/GPU 型号、内存容量/频率、磁盘、系统版本等，逐项开关标签 / 图标、图标颜色、磁盘选择、文本对齐
+- **Box 动画控件**：9 种动态背景效果（网格、雨滴、光斑、霓虹、矩阵等）
+- **Sensor Sparkline**：新增自动缩放开关，关闭后可手动固定 Y 轴最小 / 最大值
 
-![Dashboard](website-source/images/screenshots/Screenshot%202026-04-10%20132009.png)
+### 🟢 自定义控件增强
 
-**Panel Editor** — drag-and-drop widget canvas
+- **按需订阅自动推断**：静态扫描控件 HTML 中的 `.category / .type / .name === 'X'` 比较，自动推断所需传感器并订阅，无需修改控件代码；显式 `__xstatSubscribe` 声明优先；附 CUSTOM_WIDGET_GUIDE.md 使用文档
+- **文件附件**：支持 `./data/…` 引用控件自带文件
+- **双环境稳定渲染**：网页端走服务端 HTTP 端点（`/api/widget`），Electron 桌面编辑器走内存 srcDoc，规避 Chromium 有痕 profile 下 srcdoc iframe 不布局的渲染缺陷；内置 paint-check 空高度重建保护
 
-![Panel Editor](website-source/images/screenshots/Screenshot%202026-04-10%20132022.png)
+### 🟢 界面与体验
 
-**Settings** — configurable port, poll interval, and LAN web panel QR code
-
-![Settings](website-source/images/screenshots/Screenshot%202026-04-10%20132029.png)
-
-**Custom Widget Editor** — full HTML/CSS/JS editor with Monaco and live preview
-
-![Custom Widget Editor](website-source/images/screenshots/Screenshot%202026-04-10%20132354.png)
-
-**Android Companion** — auto-discovers XStat and displays the panel full-screen
-
-| Searching | No panel configured | Connection lost |
-|---|---|---|
-| ![Searching](website-source/images/android-screenshots/Screenshot%202026-04-10%20230600.png) | ![No panel](website-source/images/android-screenshots/Screenshot%202026-04-10%20230514.png) | ![Lost](website-source/images/android-screenshots/Screenshot%202026-04-10%20230500.png) |
-
----
-
-## Features
-
-| Category | Highlights |
-|---|---|
-| **Real-time sensors** | CPU, GPU, RAM, Motherboard, Storage, Network — 291+ sensor channels |
-| **Panel editor** | Drag-and-drop grid layout, resizable widgets, z-index layering |
-| **Widget library** | Value, Bar, Sparkline, Gauge, Clock, Text, Image, Custom HTML |
-| **Custom widgets** | Full HTML/CSS/JS editor with Monaco, live preview, sensor data injection |
-| **LAN web panel** | Serve your panel to any device on your network — QR code included |
-| **Android companion** | Auto-discovers XStat via UDP, full-screen panel on phones/tablets/Android TV |
-| **Auto-reconnect** | Android app detects connection loss and restarts discovery automatically |
-| **Startup options** | Start minimised to tray; Start with Windows (login item) |
-| **Panel persistence** | Last active panel is pushed automatically on every app launch |
-| **Per-element styling** | Individual colour, font, size, bold, italic controls per widget element |
-| **Visibility toggles** | Toggle label / value / unit / accent on/off per widget |
-| **Layer ordering** | Send to back, send backward, bring forward, bring to front |
-| **Widget naming** | Click the widget name in Properties to rename inline |
-| **Configurable port** | Change the service port from the Settings page — restarts automatically |
-| **Multiple panels** | Create and switch between named panels |
-| **Import / Export** | Export panel layouts as JSON; import on any machine |
+- **多语言**：完整简体中文与英文界面（i18n）
+- **移动端适配**：优化移动端显示、锁定页面缩放
+- **字体系统**：面板自定义字体加载（本地字体注册与接口下发）
+- **工作区管理**：保存 / 打开命名工作区（含多个面板）
+- **导入 / 导出**：控件（`.xstatwidget`）、组（`.xstatgroup`）、面板均可导出为 JSON 并导入
+- **Electron 主进程加固**：服务进程校验——`/health` 返回进程 ID 与可执行路径，不一致时自动停止旧进程并重启当前包服务（修复"前端新、后端旧"问题）；开机自启、托盘启动等启动选项
 
 ---
 
-## Tech Stack
+## 技术栈
 
-| Layer | Technology |
-|---|---|
-| Desktop shell | [Electron](https://www.electronjs.org/) 33 + [electron-vite](https://electron-vite.org/) |
-| UI framework | [React](https://react.dev/) 18 + [Material UI](https://mui.com/) 6 + TypeScript |
-| Charts | [Recharts](https://recharts.org/) (AreaChart) |
-| Grid layout | [React Grid Layout](https://github.com/react-grid-layout/react-grid-layout) |
-| Code editor | [Monaco Editor](https://microsoft.github.io/monaco-editor/) |
-| Hardware service | [ASP.NET Core 9](https://dotnet.microsoft.com/) + [LibreHardwareMonitorLib](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) |
-| Real-time push | [SignalR](https://learn.microsoft.com/aspnet/core/signalr/introduction) WebSocket hub |
-| Windows service | `Microsoft.Extensions.Hosting.WindowsServices` |
-| Android app | Kotlin + AndroidX + WebView, min SDK 21, signed APK |
+桌面端 Electron 33 + React 18 + Material UI 6 + TypeScript；服务端 ASP.NET Core 9 + LibreHardwareMonitorLib + SignalR；另附 Android 手机端应用（Kotlin）。
 
 ---
 
-## Quick Start
+## 许可
 
-### Option A — Install the release build
-
-1. Download the latest **XStat-Setup.exe** from [Releases](https://github.com/Inside4ndroid/XStat-Hardware-Monitoring/releases).
-2. Run the installer — administrator rights are required so the hardware service can access sensor data.
-3. XStat starts automatically and sits in the system tray.
-
-See [Installation Guide](https://xstat.ddns.net/docs.html#installer) for full details.
-
-### Option B — Run from source
-
-```powershell
-# Prerequisites: Node.js 20+, .NET 9 SDK, Windows
-git clone https://github.com/Inside4ndroid/XStat-Hardware-Monitoring.git
-cd XStat-Hardware-Monitoring/src/app
-npm install
-npm run dev:admin      # launches Electron + .NET service (elevation prompt)
-```
-
-See [Development Setup](https://xstat.ddns.net/docs.html#dev-setup) for full setup instructions.
-
----
-
-## Project Structure
-
-```
-xstat/
-├── src/
-│   ├── app/                    # Electron + React frontend
-│   │   ├── electron/           # main.ts, preload.ts
-│   │   └── src/
-│   │       ├── components/     # Shared UI components
-│   │       ├── pages/          # Dashboard, PanelEditor, Settings, WidgetEditor
-│   │       ├── panel/          # LAN web panel entry point
-│   │       ├── hooks/          # useSensors, usePanelLayout, useAppSettings
-│   │       └── types/          # TypeScript type definitions
-│   └── XStat.Service/          # ASP.NET Core hardware service
-│       ├── Controllers/        # REST API controllers
-│       ├── Hardware/            # LibreHardwareMonitor wrapper
-│       ├── Hubs/               # SignalR sensor hub
-│       └── Services/           # SensorBroadcastService, PanelLayoutStore, DiscoveryBeaconService
-├── android-companion/          # Android companion app (Kotlin)
-│   └── app/src/main/
-│       ├── java/net/xstat/companion/   # SplashActivity, MainActivity, DiscoveryManager
-│       └── res/                # Layouts, icons, TV banner
-├── website-source/             # Static marketing website (GitHub Pages)
-├── build.ps1                   # Full production build script
-├── release.ps1                 # GitHub release automation
-└── xstat.sln                   # Visual Studio solution
-```
-
----
-
-## Documentation
-
-| Document | Description |
-|---|---|
-| [Installation Guide](https://xstat.ddns.net/docs.html#installer) | How to install and run XStat |
-| [Android Companion](https://xstat.ddns.net/docs.html#android) | Install and use the Android app |
-| [Development Setup](https://xstat.ddns.net/docs.html#dev-setup) | Set up a local dev environment |
-| [Building for Production](https://xstat.ddns.net/docs.html#dev-build) | Build the installer and service |
-| [Architecture Overview](https://xstat.ddns.net/docs.html#arch-overview) | How the pieces fit together |
-| [Widget Reference](https://xstat.ddns.net/docs.html#widget-common) | All widget types documented |
-
----
-
-## Contributing
-
-Contributions are welcome! Please open an issue first to discuss what you'd like to change.
-
-1. Fork the repo
-2. Create your feature branch: `git checkout -b feature/my-feature`
-3. Commit your changes: `git commit -m 'Add my feature'`
-4. Push to the branch: `git push origin feature/my-feature`
-5. Open a Pull Request
-
----
-
-## License
-
-MIT © [Inside4ndroid Studios](https://github.com/Inside4ndroid) — see [LICENSE](LICENSE) for full text.
-
----
-
-<p align="center">
-  Made with ♥ by Inside4ndroid Studios
-</p>
+MIT © 上游 [Inside4ndroid Studios](https://github.com/Inside4ndroid)，完整文本见 [LICENSE](LICENSE)。
