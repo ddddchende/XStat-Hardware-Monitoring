@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react'
 import { Box, Typography } from '@mui/material'
-import { AreaChart, Area, BarChart, Bar } from 'recharts'
+import { AreaChart, Area, BarChart, Bar, YAxis } from 'recharts'
 import type { PanelWidget } from '@/types/panel'
 import type { HardwareSnapshot } from '@/types/sensors'
 import type { HistoryPoint } from '@/hooks/useSensorHistory'
@@ -34,6 +34,9 @@ export const SensorSparklineWidget: React.FC<Props> = ({ widget, snapshot, histo
   const showValue = widget.showValue ?? true
   const showAccent = widget.showAccent ?? true
   const effectiveAccent = showAccent ? accentColor : 'transparent'
+  // Auto-scale: Y axis follows the data. Turn it off to fix the range with min/max.
+  const autoScale = widget.autoScale ?? true
+  const rangeDomain: [number, number] = [widget.min ?? 0, widget.max ?? 100]
 
   // Measure the chart container ourselves so we never pass -1 to AreaChart.
   // Start with a sane default so the chart always renders immediately (even if
@@ -105,10 +108,12 @@ export const SensorSparklineWidget: React.FC<Props> = ({ widget, snapshot, histo
         {chartSize && (
           variant === 'bars' ? (
             <BarChart width={chartSize.w} height={chartSize.h} data={data} margin={chartMargin}>
+              {!autoScale && <YAxis hide domain={rangeDomain} />}
               <Bar dataKey="v" fill={effectiveAccent} isAnimationActive={false} />
             </BarChart>
           ) : (
             <AreaChart width={chartSize.w} height={chartSize.h} data={data} margin={chartMargin}>
+              {!autoScale && <YAxis hide domain={rangeDomain} />}
               <defs>
                 <linearGradient id={`wsg-${widget.id}`} x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%"  stopColor={effectiveAccent} stopOpacity={0.4} />

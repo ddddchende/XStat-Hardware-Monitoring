@@ -1,5 +1,6 @@
 using LibreHardwareMonitor.Hardware;
 using System.Diagnostics;
+using System.Management;
 using System.Text.RegularExpressions;
 using XStat.Service.Models;
 
@@ -25,6 +26,30 @@ public sealed partial class HardwareMonitor : IDisposable
 
     private readonly Lock _slowLock = new();
     private List<SensorReading> _slowReadings = [];
+
+    // Fast disk sensors (independent of LHM's slow SMART channel): % Disk Time plus
+    // read/write bytes per second, read directly from the Windows performance
+    // counter on the hot path — millisecond reads. One counter set per physical
+    // disk; counter instances are "<diskIndex> [<volume>:]" (e.g. "2 c:"), mapped
+    // to the disk model via Win32_DiskDrive so the synthetic sensors carry the
+    // same hardware name LHM uses.
+    private sealed record DiskCounters(
+        PerformanceCounter Activity,   // % Disk Time
+        PerformanceCounter ReadBytes,  // Disk Read Bytes/sec
+        PerformanceCounter WriteBytes  // Disk Write Bytes/sec
+    )
+    {
+        public void Dispose()
+        {
+            try { Activity.Dispose(); } catch { /* best effort */ }
+            try { ReadBytes.Dispose(); } catch { /* best effort */ }
+            try { WriteBytes.Dispose(); } catch { /* best effort */ }
+        }
+    }
+    private readonly Dictionary<string, DiskCounters> _diskPerfCounters = [];
+    private readonly Dictionary<int, string> _diskModelByIndex = [];
+    private long _lastDiskInstanceSync = 0;
+    private long _lastDiskModelRefresh = 0;
 
     // Diagnostics: per-hardware Update() timings (ms). Fast hardware from the last
     // GetSnapshot(); slow hardware from the last background collection.
@@ -94,6 +119,10 @@ public sealed partial class HardwareMonitor : IDisposable
             timings.Add((hw.Name, hw.HardwareType.ToString(), Math.Round(sw.Elapsed.TotalMilliseconds, 1)));
         }
         LastUpdateTimings = timings;
+
+        // Fast disk activity time — independent of the slow SMART channel (see
+        // CollectFastDiskActivity). Read inline at the configured poll rate.
+        raw.AddRange(CollectFastDiskActivity());
 
         // Merge cached slow-hardware readings (refreshed by the background collector).
         List<SensorReading> slow;
@@ -259,6 +288,178 @@ public sealed partial class HardwareMonitor : IDisposable
     }
 
     /// <summary>
+    /// Reads each physical disk's "% Disk Time" plus read/write bytes-per-second
+    /// directly from the Windows performance counter on the hot path — millisecond
+    /// reads, independent of LHM's slow SMART refresh (which only updates every 5s).
+    /// Counter instances are "&lt;diskIndex&gt; [&lt;volume&gt;:]" (e.g. "2 c:"); the disk
+    /// index is mapped to the disk model via Win32_DiskDrive so the synthetic
+    /// sensors ("Activity Time" / "Activity Read" / "Activity Write") carry the same
+    /// hardware name LHM uses. Runs on the broadcaster thread only. Fails open: any
+    /// error returns an empty list — LHM's own slow sensors keep working untouched.
+    /// </summary>
+    private List<SensorReading> CollectFastDiskActivity()
+    {
+        var result = new List<SensorReading>();
+        if (!OperatingSystem.IsWindows()) return result;
+        try
+        {
+            var now = Environment.TickCount64;
+
+            // Refresh the disk-index → model map occasionally (Win32_DiskDrive query
+            // is ~50-100ms; disk topology almost never changes).
+            if (_diskModelByIndex.Count == 0 || now - _lastDiskModelRefresh > 60_000)
+            {
+                RefreshDiskModelMap();
+                _lastDiskModelRefresh = now;
+            }
+
+            // Sync the performance-counter instances every few seconds (hot-plug).
+            if (_diskPerfCounters.Count == 0 || now - _lastDiskInstanceSync > 5_000)
+            {
+                SyncDiskCounters();
+                _lastDiskInstanceSync = now;
+            }
+
+            foreach (var (instance, c) in _diskPerfCounters)
+            {
+                float activity, readBps, writeBps;
+                try
+                {
+                    activity = Sanitize(c.Activity.NextValue());
+                    readBps  = Sanitize(c.ReadBytes.NextValue());
+                    writeBps = Sanitize(c.WriteBytes.NextValue());
+                }
+                catch { continue; } // instance may have vanished mid-iteration
+
+                var index = ParseDiskIndex(instance);
+                var model = index >= 0 && _diskModelByIndex.TryGetValue(index, out var m) && !string.IsNullOrWhiteSpace(m)
+                    ? m
+                    : $"Disk {index}";
+                result.Add(new SensorReading(
+                    Id:           $"storage/{index}/load/activity_time_fast",
+                    Name:         "Activity Time",
+                    Category:     "Storage",
+                    Type:         "Load",
+                    Value:        (float)Math.Round(activity, 1),
+                    Unit:         "%",
+                    HardwareName: model
+                ));
+                // Read/write speed — bytes/sec → MB/s, or GB/s above 1 GiB/s.
+                result.Add(BuildDiskSpeedSensor($"storage/{index}/throughput/activity_read_fast", "Activity Read", model, readBps));
+                result.Add(BuildDiskSpeedSensor($"storage/{index}/throughput/activity_write_fast", "Activity Write", model, writeBps));
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Fast disk activity read failed; falling back to the slow SMART channel.");
+        }
+        return result;
+    }
+
+    /// <summary>Win32_DiskDrive: physical disk Index → model string (e.g. 2 → "ST2000DM008-2FR102").</summary>
+    private void RefreshDiskModelMap()
+    {
+        _diskModelByIndex.Clear();
+        try
+        {
+            using var searcher = new ManagementObjectSearcher(
+                "SELECT Index, Model FROM Win32_DiskDrive");
+            foreach (ManagementBaseObject obj in searcher.Get())
+            {
+                if (obj["Index"] is null) continue;
+                var index = Convert.ToInt32(obj["Index"]);
+                var model = obj["Model"]?.ToString()?.Trim();
+                if (index >= 0 && !string.IsNullOrEmpty(model))
+                    _diskModelByIndex[index] = model;
+            }
+        }
+        catch (Exception ex)
+        {
+            // Best-effort; fall back to "Disk {n}" hardware names.
+            _logger.LogWarning(ex, "Win32_DiskDrive query failed; disk activity falls back to index names.");
+        }
+    }
+
+    /// <summary>
+    /// Ensures one read-only set of counters (activity + read/write bytes) per
+    /// PhysicalDisk instance (skipping "_total"). New instances get fresh counters;
+    /// vanished ones are disposed. The first NextValue() of a new counter returns 0 —
+    /// the next poll reports the real figure, which is fine at a 250ms cadence.
+    /// </summary>
+    private void SyncDiskCounters()
+    {
+        var instances = new HashSet<string>(StringComparer.Ordinal);
+        try
+        {
+            var category = new PerformanceCounterCategory("PhysicalDisk");
+            foreach (var name in category.GetInstanceNames())
+            {
+                if (!name.Equals("_total", StringComparison.OrdinalIgnoreCase))
+                    instances.Add(name);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Unable to enumerate PhysicalDisk performance counters.");
+            return;
+        }
+
+        foreach (var stale in _diskPerfCounters.Keys.Where(k => !instances.Contains(k)).ToList())
+        {
+            try { _diskPerfCounters[stale].Dispose(); } catch { /* best effort */ }
+            _diskPerfCounters.Remove(stale);
+        }
+
+        foreach (var instance in instances)
+        {
+            if (_diskPerfCounters.ContainsKey(instance)) continue;
+            try
+            {
+                var counters = new DiskCounters(
+                    new PerformanceCounter("PhysicalDisk", "% Disk Time", instance, readOnly: true),
+                    new PerformanceCounter("PhysicalDisk", "Disk Read Bytes/sec", instance, readOnly: true),
+                    new PerformanceCounter("PhysicalDisk", "Disk Write Bytes/sec", instance, readOnly: true)
+                );
+                counters.Activity.NextValue();  // warm-up — first read is 0
+                counters.ReadBytes.NextValue();
+                counters.WriteBytes.NextValue();
+                _diskPerfCounters[instance] = counters;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Failed to create counters for PhysicalDisk instance '{Instance}'.", instance);
+            }
+        }
+    }
+
+    /// <summary>Extracts the leading disk index from a counter instance name ("2 c:" → 2, "5" → 5).</summary>
+    private static int ParseDiskIndex(string instance)
+    {
+        var i = instance.IndexOf(' ');
+        var num = i > 0 ? instance[..i] : instance;
+        return int.TryParse(num, out var n) ? n : -1;
+    }
+
+    /// <summary>Maps NaN/Infinity counter values to 0 (the same sanitization LHM values get).</summary>
+    private static float Sanitize(float v) =>
+        float.IsNaN(v) || float.IsInfinity(v) ? 0f : v;
+
+    /// <summary>
+    /// Builds a disk speed sensor with an adaptive unit: GB/s at/above 1 GiB/s,
+    /// otherwise MB/s (bytes/sec converted accordingly).
+    /// </summary>
+    private static SensorReading BuildDiskSpeedSensor(string id, string name, string hardwareName, float bytesPerSec)
+    {
+        const float MiB = 1048576f;
+        const float GiB = 1073741824f;
+        return bytesPerSec >= GiB
+            ? new SensorReading(Id: id, Name: name, Category: "Storage", Type: "Throughput",
+                Value: (float)Math.Round(bytesPerSec / GiB, 2), Unit: "GB/s", HardwareName: hardwareName)
+            : new SensorReading(Id: id, Name: name, Category: "Storage", Type: "Throughput",
+                Value: (float)Math.Round(bytesPerSec / MiB, 2), Unit: "MB/s", HardwareName: hardwareName);
+    }
+
+    /// <summary>
     /// Returns true for virtual / filter-driver network adapters that should be hidden.
     /// LHM exposes every NDIS filter layer as a separate adapter; e.g.:
     ///   "Ethernet-WFP Native MAC Layer LightWeight Filter-0000"
@@ -280,7 +481,7 @@ public sealed partial class HardwareMonitor : IDisposable
     [GeneratedRegex(@"^Local Area Connection\*")]
     private static partial Regex VirtualHotspotRegex();
 
-    private static void CollectHardware(IHardware hw, List<SensorReading> sensors, bool doUpdate)
+    private void CollectHardware(IHardware hw, List<SensorReading> sensors, bool doUpdate)
     {
         // Skip noise: virtual/filter-layer network adapters
         if (hw.HardwareType == HardwareType.Network && IsVirtualNetworkAdapter(hw.Name))
@@ -393,6 +594,11 @@ public sealed partial class HardwareMonitor : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        foreach (var counters in _diskPerfCounters.Values)
+        {
+            try { counters.Dispose(); } catch { /* best effort */ }
+        }
+        _diskPerfCounters.Clear();
         try { _computer.Close(); } catch { /* best effort */ }
     }
 }

@@ -12,6 +12,7 @@ export type WidgetType =
   | 'Box'
   | 'SystemInfo'
   | 'SensorList'
+  | 'SvgIcon'
 
 /** Box widget background animation presets (Uiverse.io references). */
 export type BoxAnimation =
@@ -57,9 +58,12 @@ export interface PanelWidget {
   // Clock / Text global font
   fontFamily?: string
   italic?: boolean
-  // Range (Bar + Gauge)
+  // Range (Bar + Gauge + Sparkline)
   min?: number
   max?: number
+  // SensorSparkline: true (default) = Y axis auto-scales to the data;
+  // false = use the min/max values above as a fixed range.
+  autoScale?: boolean
   // SensorBar progress bar thickness (px)
   barThickness?: number
   // Widget style variant:
@@ -93,6 +97,8 @@ export interface PanelWidget {
   imageDataUrl?: string
   imageObjectFit?: 'contain' | 'cover' | 'fill' | 'none'
   imageOpacity?: number
+  // SVG icon widget — raw SVG markup, rendered as-is inside the widget box
+  svgCode?: string
   // Box (rectangle frame) widget
   boxFill?: string          // background color
   boxBorderColor?: string   // border color
@@ -164,4 +170,5 @@ export const WIDGET_DEFAULTS: Record<WidgetType, { w: number; h: number }> = {
   Box:             { w: 337, h: 560 },
   SystemInfo:      { w: 260, h: 200 },
   SensorList:      { w: 260, h: 320 },
+  SvgIcon:         { w: 80,  h: 80  },
 }

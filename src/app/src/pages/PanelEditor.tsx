@@ -14,6 +14,7 @@ import ExpandMoreIcon      from '@mui/icons-material/ExpandMore'
 import DeleteOutlineIcon   from '@mui/icons-material/DeleteOutline'
 import ZoomInIcon          from '@mui/icons-material/ZoomIn'
 import GridOnIcon           from '@mui/icons-material/GridOn'
+import AlignHorizontalLeftIcon from '@mui/icons-material/AlignHorizontalLeft'
 import UndoIcon             from '@mui/icons-material/Undo'
 import RedoIcon             from '@mui/icons-material/Redo'
 import LockIcon             from '@mui/icons-material/Lock'
@@ -58,6 +59,7 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
   const [renameValue,      setRenameValue]       = useState('')
   const [panelMenuAnchor,  setPanelMenuAnchor]   = useState<HTMLElement | null>(null)
   const [snapToGrid,       setSnapToGrid]        = useState(false)
+  const [smartAlign,       setSmartAlign]        = useState(true)
   const canvasLocked = activePanel.locked ?? false
   const [zoom,             setZoom]              = useState(1)
   const [panX,             setPanX]              = useState(0)
@@ -495,6 +497,19 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
                   <GridOnIcon sx={{ fontSize: 16 }} />
                 </IconButton>
               </Tooltip>
+              <Tooltip title={smartAlign ? t('panelEditor.alignOn') : t('panelEditor.alignOff')} arrow>
+                <IconButton
+                  size="small"
+                  onClick={() => setSmartAlign(v => !v)}
+                  sx={{
+                    color: smartAlign ? 'primary.main' : 'text.disabled',
+                    background: smartAlign ? alpha(theme.palette.primary.main, 0.12) : 'transparent',
+                    borderRadius: 1,
+                  }}
+                >
+                  <AlignHorizontalLeftIcon sx={{ fontSize: 16 }} />
+                </IconButton>
+              </Tooltip>
               <Tooltip title={canvasLocked ? t('panelEditor.unlockCanvas') : t('panelEditor.lockCanvas')} arrow>
                 <IconButton
                   size="small"
@@ -684,6 +699,7 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
               history={history}
               isEditMode={isEditMode}
               snapToGrid={snapToGrid}
+              smartAlign={smartAlign}
               zoom={zoom}
               locked={canvasLocked}
               selectedWidgetIds={selectedWidgetIds}

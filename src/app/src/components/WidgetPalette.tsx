@@ -14,6 +14,7 @@ import InfoIcon          from '@mui/icons-material/Info'
 import CategoryIcon      from '@mui/icons-material/Category'
 import ListAltIcon       from '@mui/icons-material/ListAlt'
 import UploadFileIcon    from '@mui/icons-material/UploadFile'
+import StarIcon           from '@mui/icons-material/Star'
 import type { WidgetType, PanelWidget } from '@/types/panel'
 import { ICON_CATEGORIES, ICONS, iconToDataUrl } from '@/data/iconLibrary'
 
@@ -47,6 +48,7 @@ const GROUPS: PaletteGroup[] = [
       { type: 'Clock', labelKey: 'palette.clock', icon: <AccessTimeIcon sx={{ fontSize: 18 }} />, hintKey: 'palette.clockHint' },
       { type: 'Text',  labelKey: 'palette.text',  icon: <TextFieldsIcon sx={{ fontSize: 18 }} />, hintKey: 'palette.textHint' },
       { type: 'Box',   labelKey: 'palette.box',   icon: <CropSquareIcon sx={{ fontSize: 18 }} />, hintKey: 'palette.boxHint' },
+      { type: 'SvgIcon', labelKey: 'palette.svgIcon', icon: <StarIcon sx={{ fontSize: 18 }} />, hintKey: 'palette.svgIconHint' },
       { type: 'SystemInfo', labelKey: 'palette.systemInfo', icon: <InfoIcon sx={{ fontSize: 18 }} />, hintKey: 'palette.systemInfoHint' },
     ],
   },

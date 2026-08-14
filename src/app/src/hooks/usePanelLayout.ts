@@ -152,6 +152,10 @@ function makeDefaultWidget(type: WidgetType): PanelWidget {
       return { ...base, sysShowCpu: true, sysShowGpu: true, sysShowRamTotal: true, sysShowRamSpeed: true, sysShowOs: true, sysShowDisks: true }
     case 'SensorList':
       return { ...base }
+    case 'SvgIcon':
+      return { ...base, color: '#ffffff', svgCode: `<svg viewBox="0 0 24 24" width="100%" height="100%" fill="currentColor" aria-hidden="true">
+  <path d="M12 2l2.92 6.26L21.5 9.27l-4.75 4.63 1.12 6.53L12 17.06 6.13 20.43l1.12-6.53L2.5 9.27l6.58-1.01L12 2z"/>
+</svg>` }
   }
 }
 

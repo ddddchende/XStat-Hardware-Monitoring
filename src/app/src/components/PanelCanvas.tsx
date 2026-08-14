@@ -77,12 +77,68 @@ function smartSnap(
   }
 }
 
+/**
+ * Resize smart-snap: while dragging a resize handle, align only the edge(s)
+ * being changed (e/bottom = growing edge, w/top = shrinking edge) to the other
+ * widgets' edges/centers and the canvas edges/center, on the relevant axes.
+ * Returns the adjusted geometry plus guide line positions to draw.
+ */
+function resizeSmartSnap(
+  x: number, y: number, w: number, h: number, dir: Dir,
+  others: LayoutItem[], selfId: string,
+  canvasW: number, canvasH: number,
+): { x: number; y: number; w: number; h: number; vGuide: number | null; hGuide: number | null } {
+  const tx: number[] = [0, canvasW / 2, canvasW]
+  const ty: number[] = [0, canvasH / 2, canvasH]
+  for (const l of others) {
+    if (l.i === selfId) continue
+    tx.push(l.x, l.x + l.w / 2, l.x + l.w)
+    ty.push(l.y, l.y + l.h / 2, l.y + l.h)
+  }
+  // Nearest target within threshold (returns null when nothing is close).
+  const nearest = (targets: number[], current: number): number | null => {
+    let best: number | null = null
+    let bestT: number | null = null
+    for (const t of targets) {
+      const d = Math.abs(t - current)
+      if (d <= SNAP_THRESHOLD && (best === null || d < best)) { best = d; bestT = t }
+    }
+    return bestT
+  }
+
+  let vGuide: number | null = null
+  let hGuide: number | null = null
+  const axes = dir.split('')
+
+  // Vertical axis (x / width) — track the edge this handle moves
+  if (axes.includes('e')) {
+    const t = nearest(tx, x + w)
+    if (t !== null && t - x >= MIN_SIZE) { w = t - x; vGuide = t }
+  } else if (axes.includes('w')) {
+    const right = x + w
+    const t = nearest(tx, x)
+    if (t !== null && right - t >= MIN_SIZE) { x = t; w = right - t; vGuide = t }
+  }
+  // Horizontal axis (y / height)
+  if (axes.includes('s')) {
+    const t = nearest(ty, y + h)
+    if (t !== null && t - y >= MIN_SIZE) { h = t - y; hGuide = t }
+  } else if (axes.includes('n')) {
+    const bottom = y + h
+    const t = nearest(ty, y)
+    if (t !== null && bottom - t >= MIN_SIZE) { y = t; h = bottom - t; hGuide = t }
+  }
+  return { x, y, w, h, vGuide, hGuide }
+}
+
 interface Props {
   panel: PanelLayout
   snapshot: HardwareSnapshot | null
   history: Map<string, HistoryPoint[]>
   isEditMode: boolean
   snapToGrid?: boolean
+  /** Smart alignment guides — snap dragged/moved edges to other widgets & canvas. */
+  smartAlign?: boolean
   selectedWidgetIds: string[]
   onSelect: (id: string | null, additive?: boolean) => void
   onWidgetGeometries: (updates: GeomUpdate[]) => void
@@ -100,6 +156,7 @@ export const PanelCanvas: React.FC<Props> = ({
   history,
   isEditMode,
   snapToGrid,
+  smartAlign = true,
   selectedWidgetIds,
   onSelect,
   onWidgetGeometries,
@@ -115,6 +172,7 @@ export const PanelCanvas: React.FC<Props> = ({
   const layoutRef = useRef(panel.layout)
   const geoRef    = useRef(onWidgetGeometries)
   const snapRef   = useRef(snapToGrid)
+  const alignRef  = useRef(smartAlign)
   const zoomRef   = useRef(zoom ?? 1)
   const vGuideRef = useRef<HTMLDivElement | null>(null)
   const hGuideRef = useRef<HTMLDivElement | null>(null)
@@ -122,6 +180,7 @@ export const PanelCanvas: React.FC<Props> = ({
   useEffect(() => { layoutRef.current = panel.layout },   [panel.layout])
   useEffect(() => { geoRef.current    = onWidgetGeometries }, [onWidgetGeometries])
   useEffect(() => { snapRef.current   = snapToGrid },       [snapToGrid])
+  useEffect(() => { alignRef.current  = smartAlign },       [smartAlign])
   useEffect(() => { zoomRef.current   = zoom ?? 1 },        [zoom])
   useEffect(() => { canvasSizeRef.current = { w: panel.canvasWidth, h: panel.canvasHeight } }, [panel.canvasWidth, panel.canvasHeight])
 
@@ -175,15 +234,21 @@ export const PanelCanvas: React.FC<Props> = ({
           x = Math.round(x / G) * G
           y = Math.round(y / G) * G
         }
-        // Snap against everything NOT being dragged (incl. canvas edges/center)
-        const dragging = new Set([op.id, ...(op.group?.map(g => g.id) ?? [])])
-        const others = layoutRef.current.filter(l => !dragging.has(l.i))
-        const snap = smartSnap(x, y, op.ow, op.oh, others, op.id, canvasSizeRef.current.w, canvasSizeRef.current.h)
-        x = snap.x
-        y = snap.y
-        // While axis-locked, never let smart-snap shift the locked axis
-        if (lock === 'x') y = op.oy + dym
-        if (lock === 'y') x = op.ox + dxm
+        let vGuide: number | null = null
+        let hGuide: number | null = null
+        if (alignRef.current) {
+          // Snap against everything NOT being dragged (incl. canvas edges/center)
+          const dragging = new Set([op.id, ...(op.group?.map(g => g.id) ?? [])])
+          const others = layoutRef.current.filter(l => !dragging.has(l.i))
+          const snap = smartSnap(x, y, op.ow, op.oh, others, op.id, canvasSizeRef.current.w, canvasSizeRef.current.h)
+          x = snap.x
+          y = snap.y
+          vGuide = snap.vGuide
+          hGuide = snap.hGuide
+          // While axis-locked, never let smart-snap shift the locked axis
+          if (lock === 'x') y = op.oy + dym
+          if (lock === 'y') x = op.ox + dxm
+        }
         const ddx = x - (op.ox + dxm)   // snap adjustment applied to the whole group
         const ddy = y - (op.oy + dym)
 
@@ -200,11 +265,11 @@ export const PanelCanvas: React.FC<Props> = ({
 
         const vg = vGuideRef.current, hg = hGuideRef.current
         if (vg) {
-          if (snap.vGuide !== null) { vg.style.display = 'block'; vg.style.left = `${snap.vGuide}px` }
+          if (vGuide !== null) { vg.style.display = 'block'; vg.style.left = `${vGuide}px` }
           else vg.style.display = 'none'
         }
         if (hg) {
-          if (snap.hGuide !== null) { hg.style.display = 'block'; hg.style.top = `${snap.hGuide}px` }
+          if (hGuide !== null) { hg.style.display = 'block'; hg.style.top = `${hGuide}px` }
           else hg.style.display = 'none'
         }
         return
@@ -247,6 +312,22 @@ export const PanelCanvas: React.FC<Props> = ({
           case 'ne': { y = s(y); h = Math.max(G, fBottom - y); const r2 = s(x + w); w = Math.max(G, r2 - x); break }
           case 'sw': { x = s(x); w = Math.max(G, fRight - x); const b2 = s(y + h); h = Math.max(G, b2 - y); break }
           case 'nw': { x = s(x); y = s(y); w = Math.max(G, fRight - x); h = Math.max(G, fBottom - y); break }
+        }
+      }
+
+      // Smart alignment: snap the edges this handle moves to other widgets/canvas
+      if (alignRef.current) {
+        const others = layoutRef.current.filter(l => l.i !== op.id)
+        const rs = resizeSmartSnap(x, y, w, h, op.dir!, others, op.id, canvasSizeRef.current.w, canvasSizeRef.current.h)
+        x = rs.x; y = rs.y; w = rs.w; h = rs.h
+        const vg = vGuideRef.current, hg = hGuideRef.current
+        if (vg) {
+          if (rs.vGuide !== null) { vg.style.display = 'block'; vg.style.left = `${rs.vGuide}px` }
+          else vg.style.display = 'none'
+        }
+        if (hg) {
+          if (rs.hGuide !== null) { hg.style.display = 'block'; hg.style.top = `${rs.hGuide}px` }
+          else hg.style.display = 'none'
         }
       }
 

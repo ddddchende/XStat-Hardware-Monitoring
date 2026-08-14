@@ -297,7 +297,7 @@ const isSensorWidget = (w: PanelWidget) =>
   ['SensorValue', 'SensorBar', 'SensorSparkline', 'SensorGauge'].includes(w.type)
 
 const hasRange = (w: PanelWidget) =>
-  w.type === 'SensorBar' || w.type === 'SensorGauge'
+  w.type === 'SensorBar' || w.type === 'SensorGauge' || w.type === 'SensorSparkline'
 
 // Style variants per sensor widget type (shown as a segmented control in the panel)
 const VARIANT_OPTIONS: Record<string, { value: string; labelKey: string }[]> = {
@@ -600,10 +600,25 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
         </Box>
       )}
 
-      {/* ── Range (Bar + Gauge) ──────────────────────────────────── */}
+      {/* ── Range (Bar + Gauge + Sparkline) ─────────────────────── */}
       {hasRange(widget) && (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
           <SectionLabel>{t('widgetProperties.range')}</SectionLabel>
+          {/* Sparkline: Y axis auto-scales by default; turn it off to set min/max manually */}
+          {widget.type === 'SensorSparkline' && (
+            <FormControlLabel
+              control={
+                <Switch
+                  size="small"
+                  checked={widget.autoScale ?? true}
+                  onChange={e => onUpdate({ autoScale: e.target.checked })}
+                />
+              }
+              label={t('widgetProperties.autoScale')}
+              sx={{ m: 0 }}
+            />
+          )}
+          {(widget.type !== 'SensorSparkline' || widget.autoScale === false) && (
           <Box sx={{ display: 'flex', gap: 1 }}>
             <TextField
               size="small"
@@ -622,6 +637,7 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
               sx={{ flex: 1 }}
             />
           </Box>
+          )}
           {widget.type === 'SensorBar' && (
             <TextField
               size="small"
@@ -1034,6 +1050,39 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
               }
               sx={{ width: '100%', accentColor: 'primary.main', cursor: 'pointer' }}
             />
+          </Box>
+        </Box>
+      )}
+
+      {/* ── SVG 图标控件 ─────────────────────────────── */}
+      {widget.type === 'SvgIcon' && (
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+          <SectionLabel>{t('widgetProperties.svgIcon')}</SectionLabel>
+
+          {/* SVG 代码编辑 */}
+          <Box>
+            <SectionLabel>{t('widgetProperties.svgCode')}</SectionLabel>
+            <Box
+              component="textarea"
+              value={widget.svgCode ?? ''}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => onUpdate({ svgCode: e.target.value })}
+              placeholder={'<svg viewBox="0 0 24 24">…</svg>'}
+              spellCheck={false}
+              sx={{
+                width: '100%', minHeight: 120,
+                fontFamily: 'Consolas, monospace', fontSize: '0.7rem',
+                color: 'text.primary', bgcolor: 'background.paper',
+                borderRadius: 1, border: '1px solid rgba(255,255,255,0.12)',
+                p: 1, resize: 'vertical',
+                '&:focus': { outline: 'none', borderColor: 'primary.main' },
+              }}
+            />
+          </Box>
+
+          {/* 图标颜色（SVG 里 fill="currentColor" 时生效） */}
+          <Box>
+            <SectionLabel>{t('widgetProperties.iconColor')}</SectionLabel>
+            <ColorSwatchesPicker value={widget.color ?? '#ffffff'} onChange={c => onUpdate({ color: c })} />
           </Box>
         </Box>
       )}
