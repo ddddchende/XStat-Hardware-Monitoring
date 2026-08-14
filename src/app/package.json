@@ -68,6 +68,10 @@
         "filter": [
           "**/*"
         ]
+      },
+      {
+        "from": "../../CUSTOM_WIDGET_GUIDE.md",
+        "to": "CUSTOM_WIDGET_GUIDE.md"
       }
     ],
     "win": {

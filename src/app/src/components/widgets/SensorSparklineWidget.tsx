@@ -36,18 +36,25 @@ export const SensorSparklineWidget: React.FC<Props> = ({ widget, snapshot, histo
   const effectiveAccent = showAccent ? accentColor : 'transparent'
 
   // Measure the chart container ourselves so we never pass -1 to AreaChart.
+  // Start with a sane default so the chart always renders immediately (even if
+  // ResizeObserver hasn't reported the real size yet) — otherwise the panel can
+  // show an empty box on first paint despite having data.
   const chartBoxRef = useRef<HTMLDivElement>(null)
-  const [chartSize, setChartSize] = useState<{ w: number; h: number } | null>(null)
+  const [chartSize, setChartSize] = useState<{ w: number; h: number }>({ w: 200, h: 60 })
 
   useEffect(() => {
     const el = chartBoxRef.current
     if (!el) return
-    const ro = new ResizeObserver(entries => {
-      const { width, height } = entries[0].contentRect
-      if (width > 0 && height > 0) setChartSize({ w: Math.floor(width), h: Math.floor(height) })
-    })
+    const measure = () => {
+      const w = el.clientWidth
+      const h = el.clientHeight
+      if (w > 0 && h > 0) setChartSize({ w: Math.floor(w), h: Math.floor(h) })
+    }
+    measure()
+    const raf = requestAnimationFrame(measure) // catch post-layout size
+    const ro = new ResizeObserver(() => measure())
     ro.observe(el)
-    return () => ro.disconnect()
+    return () => { cancelAnimationFrame(raf); ro.disconnect() }
   }, [])
 
   const chartMargin = { top: 2, right: 0, left: 0, bottom: 0 }

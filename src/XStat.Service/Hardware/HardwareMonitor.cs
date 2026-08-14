@@ -1,5 +1,6 @@
 using LibreHardwareMonitor.Hardware;
 using System.Diagnostics;
+using System.Text.RegularExpressions;
 using XStat.Service.Models;
 
 namespace XStat.Service.Hardware;
@@ -7,7 +8,7 @@ namespace XStat.Service.Hardware;
 /// <summary>
 /// Wraps LibreHardwareMonitor. Must run elevated (Administrator) for full sensor access.
 /// </summary>
-public sealed class HardwareMonitor : IDisposable
+public sealed partial class HardwareMonitor : IDisposable
 {
     private readonly Computer _computer;
     private readonly ILogger<HardwareMonitor> _logger;
@@ -22,8 +23,8 @@ public sealed class HardwareMonitor : IDisposable
     private static bool IsSlowHardware(HardwareType t) =>
         t == HardwareType.Storage;
 
-    private readonly object _slowLock = new();
-    private List<SensorReading> _slowReadings = new();
+    private readonly Lock _slowLock = new();
+    private List<SensorReading> _slowReadings = [];
 
     // Diagnostics: per-hardware Update() timings (ms). Fast hardware from the last
     // GetSnapshot(); slow hardware from the last background collection.
@@ -106,6 +107,7 @@ public sealed class HardwareMonitor : IDisposable
             if (seen.Add(s.Id)) sensors.Add(s);
 
         sensors = KeepPhysicalMemoryUsage(sensors);
+        sensors = FixTotalPhysicalMemory(sensors);
         sensors = AddTotalNetworkThroughput(sensors);
 
         return new HardwareSnapshot(
@@ -151,6 +153,33 @@ public sealed class HardwareMonitor : IDisposable
 
         var physicalKey = totals.MinBy(kv => kv.Value).Key;
         return sensors.Where(s => !IsUsage(s) || HardwareKey(s.Id) == physicalKey).ToList();
+    }
+
+    /// <summary>
+    /// Total Physical Memory should reflect the installed physical RAM — the sum
+    /// of every module's Capacity from SPD (e.g. 64 GB). Windows reserves part of
+    /// the RAM for the kernel/hardware, so the synthesized Used + Available value
+    /// under-reports (e.g. 63.7 GB for 64 GB installed). When SPD capacities are
+    /// unavailable (VMs, boards that can't read SPD) this falls back to the
+    /// Used + Available value synthesized in CollectHardware.
+    /// </summary>
+    private static List<SensorReading> FixTotalPhysicalMemory(List<SensorReading> sensors)
+    {
+        float? totalCapacity = null;
+        foreach (var s in sensors)
+        {
+            if (s.Category == "RAM" && s.Type == "Data"
+                && s.Name.Contains("Capacity", StringComparison.OrdinalIgnoreCase) && s.Value is not null)
+                totalCapacity = (totalCapacity ?? 0f) + s.Value.Value;
+        }
+
+        if (totalCapacity is null) return sensors;
+
+        return sensors.Select(s =>
+            s.Category == "RAM" && s.Type == "Data" && s.Name == "Total Physical Memory"
+                ? s with { Value = (float)Math.Round(totalCapacity.Value, 1) }
+                : s
+        ).ToList();
     }
 
     /// <summary>Sensor id minus the trailing "/type/index" → identifies the owning hardware entry.</summary>
@@ -239,11 +268,17 @@ public sealed class HardwareMonitor : IDisposable
     /// </summary>
     private static bool IsVirtualNetworkAdapter(string name) =>
         // Filter drivers: end with hyphen-word(s)-four-digits  e.g. "-QoS Packet Scheduler-0000"
-        System.Text.RegularExpressions.Regex.IsMatch(name, @"-.+-\d{4}$") ||
+        VirtualAdapterRegex().IsMatch(name) ||
         // Windows kernel debugger pseudo-adapter
         name.Contains("Kernel Debugger", StringComparison.OrdinalIgnoreCase) ||
         // Virtual hotspot / mobile broadband adapters
-        System.Text.RegularExpressions.Regex.IsMatch(name, @"^Local Area Connection\*");
+        VirtualHotspotRegex().IsMatch(name);
+
+    [GeneratedRegex(@"-.+-\d{4}$")]
+    private static partial Regex VirtualAdapterRegex();
+
+    [GeneratedRegex(@"^Local Area Connection\*")]
+    private static partial Regex VirtualHotspotRegex();
 
     private static void CollectHardware(IHardware hw, List<SensorReading> sensors, bool doUpdate)
     {
@@ -292,7 +327,9 @@ public sealed class HardwareMonitor : IDisposable
         }
 
         // LHM's RAM hardware only exposes Used + Available; synthesize Total so the UI
-        // can show physical total memory as a selectable sensor under RAM.
+        // can show physical total memory as a selectable sensor under RAM. This is a
+        // fallback — FixTotalPhysicalMemory() later overrides the value with the sum of
+        // all module Capacities (SPD) when available, which includes Windows-reserved RAM.
         if (hw.HardwareType == HardwareType.Memory && memUsed.HasValue && memAvail.HasValue)
         {
             sensors.Add(new SensorReading(

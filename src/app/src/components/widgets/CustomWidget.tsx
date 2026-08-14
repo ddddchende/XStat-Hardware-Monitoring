@@ -1,6 +1,7 @@
-import React, { useRef, useEffect } from 'react'
+import React, { useRef, useEffect, useState, useContext, useMemo } from 'react'
 import type { PanelWidget } from '@/types/panel'
-import type { HardwareSnapshot } from '@/types/sensors'
+import type { HardwareSnapshot, SensorReading } from '@/types/sensors'
+import { PanelSubscriptionContext } from '@/panel/PanelSubscriptionContext'
 
 interface Props {
   widget: PanelWidget
@@ -9,22 +10,18 @@ interface Props {
 
 /**
  * Replace static ./data/{filename} occurrences with their data URLs, and inject
- * a tiny bootstrap so window.__xstatFiles is populated at runtime via postMessage
- * (avoids embedding megabytes of base64 directly in srcDoc).
+ * a tiny bootstrap so window.__xstatFiles is populated at runtime via postMessage.
+ * 编辑器（file:// 环境，控件走 srcDoc 内存 HTML）使用；web 端由服务端 /api/widget 静态替换。
  */
 function applyFiles(html: string, files?: Record<string, string>): string {
   const entries = Object.entries(files ?? {})
   if (entries.length === 0) return html
 
-  // 1. Replace static ./data/{filename} references (CSS background-image, img src, etc.)
   let result = html
   for (const [name, dataUrl] of entries) {
     result = result.split(`./data/${name}`).join(dataUrl)
   }
 
-  // 2. Inject bootstrap: patches img.src + style.backgroundImage setters so ./data/ paths
-  //    resolve transparently at runtime. Uses no regex — template literals strip backslashes.
-  //    window.__xstatFiles is populated via postMessage after the iframe loads.
   const bootstrap = '<script>(function(){'
     + 'window.__xstatFiles={};'
     + 'try{'
@@ -69,8 +66,121 @@ function applyFiles(html: string, files?: Record<string, string>): string {
   } else {
     result = bootstrap + result
   }
-
   return result
+}
+
+/**
+ * 注入"绘制自检"脚本：iframe 加载后 400ms 向父页面报告自身高度。
+ * Chromium 偶发对 srcdoc iframe 不执行布局（高度为 0 → 控件空白），父页面据此强制重建恢复。
+ */
+function injectPaintCheck(html: string): string {
+  const check = '<script>setTimeout(function(){try{var h=window.innerHeight||document.documentElement.offsetHeight||0;'
+    + 'window.parent.postMessage({__xstatPaintCheck:h},\'*\');}catch(e){}},400);<\/script>'
+  if (html.includes('</head>')) return html.replace('</head>', check + '</head>')
+  if (html.includes('<body')) return html.replace(/<body[^>]*>/, m => m + check)
+  return check + html
+}
+
+/**
+ * 自定义控件按需订阅协议
+ * ------------------------------------------------
+ * 未声明订阅的控件收到面板已订阅的传感器子集（跟随面板其余控件，避免整个面板
+ * 退化为全量推送）。控件可以在脚本里通过 window.parent.postMessage 声明自己
+ * 需要的传感器，之后父页面只转发匹配的子集（同时上报服务端，减小 ws 流量）：
+ *
+ *   // 1) 按 id / name 精确或包含匹配
+ *   window.parent.postMessage({ __xstatSubscribe: ['cpu/intelcpu/0/power/0'] }, '*');
+ *
+ *   // 2) 按字段条件匹配（category/type/name/id/hardwareName/unit，不区分大小写包含匹配）
+ *   window.parent.postMessage({ __xstatSubscribe: [{ category: 'CPU', type: 'Power' }] }, '*');
+ *
+ *   // 3) 不需要实时数据
+ *   window.parent.postMessage({ __xstatSubscribe: [] }, '*');
+ *
+ * iframe 重建后控件脚本会重新执行，父页面会重新等待声明（300ms 超时后按未声明处理）。
+ */
+type SubscribeRule = string | Record<string, string>
+
+function matchesRule(rule: SubscribeRule, s: SensorReading): boolean {
+  if (typeof rule === 'string') {
+    return s.id === rule || s.id.includes(rule) || s.name === rule
+  }
+  for (const [key, want] of Object.entries(rule)) {
+    const got = (s as unknown as Record<string, unknown>)[key]
+    if (typeof got === 'string') {
+      if (!got.toLowerCase().includes(want.toLowerCase())) return false
+    } else if (got !== want) {
+      return false
+    }
+  }
+  return true
+}
+
+function filterSensors(sensors: SensorReading[], rules: SubscribeRule[]): SensorReading[] {
+  if (rules.length === 0) return []
+  return sensors.filter(s => rules.some(r => matchesRule(r, s)))
+}
+
+const SENSOR_CATEGORIES = ['CPU', 'GPU', 'RAM', 'Storage', 'Network', 'Motherboard', 'Battery', 'PSU', 'EC', 'Other']
+const SENSOR_TYPES = ['Temperature', 'Clock', 'Load', 'Voltage', 'Power', 'Fan', 'Flow', 'Data', 'SmallData', 'Throughput', 'Control', 'Level', 'Factor']
+
+/**
+ * 自动推断控件需要的传感器 —— 保持用户编辑的 HTML 原文不变。
+ * 静态扫描脚本里对传感器字段的比较写法（s.category === 'CPU' && s.type === 'Power'、
+ * x.name === 'cpu package'、!== 排除式等），提取 category/type/name 组合成订阅规则：
+ *   - 同时出现 category 与 type → 笛卡尔积组合成 {category, type}（精确）
+ *   - 只有 category / 只有 type → 单独规则
+ *   - name 比较 → {name} 规则
+ * 提取范围保守（宁可多订阅几个，也不让控件因缺数据显示 --）。
+ * 控件显式声明 __xstatSubscribe 时以显式声明为准，覆盖推断结果。
+ */
+function inferSubscription(html: string): SubscribeRule[] {
+  const cats: string[] = []
+  const types: string[] = []
+  const names: string[] = []
+  const add = (arr: string[], v: string) => { if (!arr.some(x => x.toLowerCase() === v.toLowerCase())) arr.push(v) }
+
+  // 匹配 .category === 'X' / .type === 'X' / .name === 'X'（含 != / !==）
+  const re = /\.(category|type|name)\s*(?:==|===|!=|!==)\s*['"]([^'"]+)['"]/gi
+  for (const m of html.matchAll(re) ?? []) {
+    const field = m[1].toLowerCase()
+    const val = m[2]
+    if (field === 'category') {
+      if (SENSOR_CATEGORIES.some(c => c.toLowerCase() === val.toLowerCase())) add(cats, val)
+    } else if (field === 'type') {
+      if (SENSOR_TYPES.some(t => t.toLowerCase() === val.toLowerCase())) add(types, val)
+    } else {
+      add(names, val)
+    }
+  }
+
+  // 兜底：keywords.some(k => name === k) 这类数组匹配写法没有 `.name === 'X'` 字面量，
+  // 额外提取脚本里所有含传感器关键词的字符串字面量作为 name 规则。
+  // 误提取的字符串（CSS 类、字体名、SVG 路径等）匹配不到任何传感器，无害。
+  // 单关键词字面量（'CPU'、'used'、'total'… 多为变量名/注释）会被过滤——它们要么已由
+  // category/type 组合规则覆盖，要么太宽泛匹配一堆无关传感器。
+  const NAME_HINTS = ['memory', 'gpu', 'cpu', 'power', 'clock', 'speed', 'fan', 'voltage', 'load', 'temp',
+    'used', 'total', 'free', 'available', 'core', 'package', 'dram', 'vram', 'nvidia', 'amd', 'intel',
+    'throughput', 'download', 'upload', 'sensor', 'usage']
+  const nameRe = /['"]([A-Za-z][A-Za-z0-9 _\-()]{1,40})['"]/g
+  for (const m of html.matchAll(nameRe) ?? []) {
+    const v = m[1]
+    if (!NAME_HINTS.some(k => v.toLowerCase().includes(k))) continue
+    const words = v.split(/[\s_\-()]+/).filter(Boolean)
+    if (words.length === 1 && NAME_HINTS.includes(v.toLowerCase())) continue // 单关键词过滤
+    add(names, v)
+  }
+
+  const rules: SubscribeRule[] = []
+  if (cats.length && types.length) {
+    for (const c of cats) for (const t of types) rules.push({ category: c, type: t })
+  } else if (cats.length) {
+    for (const c of cats) rules.push({ category: c })
+  } else if (types.length) {
+    for (const t of types) rules.push({ type: t })
+  }
+  for (const n of names) rules.push({ name: n })
+  return rules
 }
 
 /**
@@ -78,36 +188,117 @@ function applyFiles(html: string, files?: Record<string, string>): string {
  * XStat posts the current sensor snapshot to the iframe via window.postMessage
  * on every poll tick so the user's script can reactively update the UI.
  *
+ * Rendering: the widget HTML is served by the XStat service as a real HTTP page
+ * (/api/widget?id=…) and loaded via iframe src= — Chrome field trials can
+ * silently leave opaque-origin srcdoc iframes at zero layout (content in DOM but
+ * never painted → blank widget), while real URL loads are unaffected. The
+ * iframe's document.baseURI is http://…, so the common font-injection snippet
+ * resolves to the service origin correctly.
+ *
  * Security: sandbox="allow-scripts" — no allow-same-origin, so the iframe
  * cannot access parent DOM, localStorage, cookies, or run elevated code.
  */
 export const CustomWidget: React.FC<Props> = ({ widget, snapshot }) => {
   const iframeRef = useRef<HTMLIFrameElement>(null)
+  // 仅由绘制自检失败时自增（重建 iframe），避免其他路径的频繁重建
+  const [renderToken, setRenderToken] = useState(0)
+  // null = 订阅未决（等待控件声明）；'all' = 未声明 → 发全量（兼容旧控件）；SubscribeRule[] = 已声明的订阅规则
+  const [subscribe, setSubscribe] = useState<SubscribeRule[] | 'all' | null>(null)
+  // 控件显式声明的订阅（__xstatSubscribe）—— 优先于自动推断
+  const [explicit, setExplicit] = useState<SubscribeRule[] | null>(null)
+  // 自动推断的订阅：静态扫描控件 HTML 的查找逻辑，无需用户修改原文
+  const inferred = useMemo(() => inferSubscription(widget.customHtml ?? ''), [widget.customHtml])
+  // 在 LAN 面板（PanelApp）中把订阅上抛给面板层，汇总成服务端订阅（减小 ws 流量）；
+  // 编辑器等没有 Provider 的场景下为 noop，无副作用。
+  const registerSubscribe = useContext(PanelSubscriptionContext)
+  // 绘制自检重试计数（防止空白重建死循环）
+  const retryCountRef = useRef(0)
 
-  // Forward sensor data into the iframe whenever the snapshot changes.
+  // 订阅状态变化时通知面板层聚合服务端订阅：
+  //  - 显式声明（__xstatSubscribe）→ 以其为准
+  //  - 否则用自动推断的规则；推断为空（纯静态控件）→ 不贡献，跟随面板其余控件子集。
+  useEffect(() => {
+    const rules = explicit ?? inferred
+    registerSubscribe(widget.id, rules.length ? rules : null)
+  }, [explicit, inferred, widget.id, registerSubscribe])
+
+  // 监听 iframe 回发的订阅声明 + 绘制自检（sandbox 下父页面读不到 iframe 内部变量，只能靠 postMessage 上行）
+  useEffect(() => {
+    const onMessage = (e: MessageEvent) => {
+      if (e.source !== iframeRef.current?.contentWindow) return
+      const data = e.data as { __xstatSubscribe?: unknown; __xstatPaintCheck?: number } | null
+      if (!data) return
+      if (Array.isArray(data.__xstatSubscribe)) {
+        const rules = data.__xstatSubscribe as SubscribeRule[]
+        setSubscribe(rules)
+        setExplicit(rules)
+      }
+      if (typeof data.__xstatPaintCheck === 'number') {
+        if (data.__xstatPaintCheck === 0 && retryCountRef.current < 2) {
+          // iframe 未执行布局（高度 0 → 空白）：重建强制恢复
+          retryCountRef.current += 1
+          setRenderToken(t => t + 1)
+        } else if (data.__xstatPaintCheck > 0) {
+          retryCountRef.current = 0
+        }
+      }
+    }
+    window.addEventListener('message', onMessage)
+    return () => window.removeEventListener('message', onMessage)
+  }, [])
+
+  // web 端（http 页面）：控件 HTML 由服务端 /api/widget 提供（真实 HTTP 加载，
+  // 规避 Chromium 对 srcdoc iframe 的渲染缺陷）。v 为内容哈希，HTML 变化时强制重载。
+  // Electron 编辑器（file://）：改用 srcDoc 加载内存 HTML（不依赖服务端 /api/widget，
+  // 服务启动时序/面板切换不影响预览，且编辑内容实时反映）。
+  const isWeb = !!window.location.origin && window.location.origin.startsWith('http')
+  const widgetSrc = useMemo(() => {
+    if (!isWeb) return ''
+    const base = window.location.origin
+    const v = hashString(widget.customHtml ?? '') + '|' + Object.keys(widget.customFiles ?? {}).length
+    return `${base}/api/widget?id=${encodeURIComponent(widget.id)}&v=${v}`
+  }, [isWeb, widget.id, widget.customHtml, widget.customFiles])
+
+  const widgetDoc = useMemo(() => {
+    if (isWeb) return undefined
+    return injectPaintCheck(applyFiles(widget.customHtml ?? '', widget.customFiles))
+  }, [isWeb, widget.customHtml, widget.customFiles])
+
+  // iframe 重建（绘制自检重试）后重新等待订阅声明
+  useEffect(() => {
+    setSubscribe(null)
+    const timer = setTimeout(() => setSubscribe(s => (s === null ? 'all' : s)), 300)
+    return () => clearTimeout(timer)
+  }, [renderToken])
+
+  // 按订阅规则把快照过滤后转发给 iframe；未决期不发数据，避免向已订阅控件泄漏全量
   useEffect(() => {
     const win = iframeRef.current?.contentWindow
-    if (!win || !snapshot) return
-    win.postMessage({ sensors: snapshot.sensors }, '*')  // no files here — sent once on onLoad
-  }, [snapshot])
-
-  const processedHtml = applyFiles(widget.customHtml ?? '', widget.customFiles)
-  // Remount the iframe when the file list itself changes (handles the case where
-  // customHtml has no static ./data/ references so srcDoc wouldn't change otherwise)
-  const fileKey = Object.keys(widget.customFiles ?? {}).sort().join('|')
+    if (!win || !snapshot || subscribe === null) return
+    const sensors = subscribe === 'all' ? snapshot.sensors : filterSensors(snapshot.sensors, subscribe)
+    win.postMessage({ sensors }, '*')
+  }, [snapshot, subscribe])
 
   return (
     <iframe
       ref={iframeRef}
-      key={fileKey}
+      key={renderToken}
       sandbox="allow-scripts"
-      srcDoc={processedHtml}
+      {...(isWeb ? { src: widgetSrc } : { srcDoc: widgetDoc })}
       onLoad={() => {
         const win = iframeRef.current?.contentWindow
         if (!win) return
         // Send files ONCE on load so window.__xstatFiles is populated;
-        // subsequent sensor updates skip files to keep messages small.
-        win.postMessage({ sensors: snapshot?.sensors ?? [], files: widget.customFiles ?? {} }, '*')
+        // sensor data flows via the subscription effect above (never files again).
+        win.postMessage({ sensors: [], files: widget.customFiles ?? {} }, '*')
+        // 轻量重绘兜底：微调 opacity 使 iframe 生成新合成层
+        const el = iframeRef.current
+        if (el) {
+          requestAnimationFrame(() => {
+            el.style.opacity = '0.999'
+            requestAnimationFrame(() => { el.style.opacity = '1' })
+          })
+        }
       }}
       style={{
         width: '100%',
@@ -119,4 +310,11 @@ export const CustomWidget: React.FC<Props> = ({ widget, snapshot }) => {
       title="xstat-custom-widget"
     />
   )
+}
+
+/** 简单字符串哈希（djb2）—— 用于控件内容版本号，HTML 变化时 iframe 强制重新加载 */
+function hashString(s: string): number {
+  let h = 5381
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0
+  return h >>> 0
 }

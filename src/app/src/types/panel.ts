@@ -13,6 +13,18 @@ export type WidgetType =
   | 'SystemInfo'
   | 'SensorList'
 
+/** Box widget background animation presets (Uiverse.io references). */
+export type BoxAnimation =
+  | 'grid'      // animated diagonal grid lines
+  | 'rain'      // cyan rain + blur grain
+  | 'blob'      // drifting neon blur blobs
+  | 'neon'      // orange/red rain + hue-rotate flicker
+  | 'cyber'     // cyber grid (cyan + magenta)
+  | 'matrix'    // digital rain columns
+  | 'green'     // green rain
+  | 'scan'      // scanline stripe pattern
+  | 'cyan'      // cyan rain + scanline grain
+
 export interface PanelWidget {
   id: string
   type: WidgetType
@@ -29,6 +41,7 @@ export interface PanelWidget {
   valueBold?: boolean
   valueFontFamily?: string
   valueItalic?: boolean
+  hideDecimals?: boolean            // round value to integer (no decimal places)
   // Per-element label styling
   labelColor?: string
   labelFontSize?: number
@@ -85,6 +98,13 @@ export interface PanelWidget {
   boxBorderColor?: string   // border color
   boxBorderWidth?: number   // border thickness (px)
   boxRadius?: number        // corner radius (px)
+  // Box background animation (toggleable, works as a background effect layer)
+  boxAnimate?: boolean
+  boxAnimation?: BoxAnimation
+  boxEffectOpacity?: number      // effect layer opacity 0–100
+  boxEffectColor?: string        // effect primary color (empty = effect default)
+  boxEffectRandom?: boolean      // randomize effect colors (blob)
+  boxEffectSpeed?: number        // animation speed multiplier (0.1–5, default 1)
   // SystemInfo widget — which fields to show + styling
   sysShowCpu?: boolean
   sysShowGpu?: boolean
@@ -98,6 +118,7 @@ export interface PanelWidget {
   sysShowIcons?: boolean        // show row icons
   sysIconColor?: string         // override icon color (falls back to accentColor)
   sysDisksToShow?: string[]    // drive letters to display (empty = all)
+  sysDiskFormat?: 'model' | 'name'  // disk row: "Model | Type (Letters)" vs "H: 资源" (letter + partition name)
   sysTextAlign?: 'left' | 'center' | 'right'  // row title + value alignment
   // Layer ordering
   zIndex?: number
@@ -125,6 +146,7 @@ export interface PanelLayout {
   canvasBackgroundImage?: string | null   // data URL or http(s) URL
   canvasShowGrid: boolean
   canvasGridColor?: string          // dot grid dot color (hex), default #ffffff
+  locked?: boolean                  // canvas lock — widgets can be selected but not dragged
   widgets: PanelWidget[]
   layout: LayoutItem[]
 }

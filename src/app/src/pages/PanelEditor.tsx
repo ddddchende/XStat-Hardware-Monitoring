@@ -16,6 +16,8 @@ import ZoomInIcon          from '@mui/icons-material/ZoomIn'
 import GridOnIcon           from '@mui/icons-material/GridOn'
 import UndoIcon             from '@mui/icons-material/Undo'
 import RedoIcon             from '@mui/icons-material/Redo'
+import LockIcon             from '@mui/icons-material/Lock'
+import LockOpenIcon         from '@mui/icons-material/LockOpen'
 
 import { usePanelLayout }    from '@/hooks/usePanelLayout'
 import type { PanelsState }  from '@/hooks/usePanelLayout'
@@ -56,6 +58,7 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
   const [renameValue,      setRenameValue]       = useState('')
   const [panelMenuAnchor,  setPanelMenuAnchor]   = useState<HTMLElement | null>(null)
   const [snapToGrid,       setSnapToGrid]        = useState(false)
+  const canvasLocked = activePanel.locked ?? false
   const [zoom,             setZoom]              = useState(1)
   const [panX,             setPanX]              = useState(0)
   const [panY,             setPanY]              = useState(0)
@@ -492,6 +495,19 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
                   <GridOnIcon sx={{ fontSize: 16 }} />
                 </IconButton>
               </Tooltip>
+              <Tooltip title={canvasLocked ? t('panelEditor.unlockCanvas') : t('panelEditor.lockCanvas')} arrow>
+                <IconButton
+                  size="small"
+                  onClick={() => updateCanvasSettings({ locked: !canvasLocked })}
+                  sx={{
+                    color: canvasLocked ? 'primary.main' : 'text.disabled',
+                    background: canvasLocked ? alpha(theme.palette.primary.main, 0.12) : 'transparent',
+                    borderRadius: 1,
+                  }}
+                >
+                  {canvasLocked ? <LockIcon sx={{ fontSize: 16 }} /> : <LockOpenIcon sx={{ fontSize: 16 }} />}
+                </IconButton>
+              </Tooltip>
               <Tooltip title={canUndo ? t('panelEditor.undo') : t('panelEditor.nothingToUndo')} arrow>
                 <span>
                   <IconButton
@@ -669,6 +685,7 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
               isEditMode={isEditMode}
               snapToGrid={snapToGrid}
               zoom={zoom}
+              locked={canvasLocked}
               selectedWidgetIds={selectedWidgetIds}
               onSelect={handleSelect}
               onWidgetGeometries={updateWidgetGeometries}

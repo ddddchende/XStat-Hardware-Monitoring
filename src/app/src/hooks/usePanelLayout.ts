@@ -480,7 +480,7 @@ export function usePanelLayout() {
     }))
   }
 
-  function updateCanvasSettings(updates: { canvasBackground?: string; canvasBackgroundImage?: string | null; canvasShowGrid?: boolean; canvasGridColor?: string }) {
+  function updateCanvasSettings(updates: { canvasBackground?: string; canvasBackgroundImage?: string | null; canvasShowGrid?: boolean; canvasGridColor?: string; locked?: boolean }) {
     commit(s => ({
       ...s,
       panels: s.panels.map(p =>

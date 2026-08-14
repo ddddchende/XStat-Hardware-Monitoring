@@ -45,8 +45,9 @@ export const SensorGaugeWidget: React.FC<Props> = ({ widget, snapshot }) => {
   const unitBold         = widget.unitBold         ?? false
   const unitFontFamily   = widget.unitFontFamily   ?? undefined
   const unitItalic       = widget.unitItalic       ?? false
+  const hideDecimals     = widget.hideDecimals     ?? false
   const label            = widget.label ?? sensor?.name ?? 'No sensor'
-  const displayValue     = sensor?.value != null ? value.toFixed(1) : '—'
+  const displayValue     = sensor?.value != null ? (hideDecimals ? value.toFixed(0) : value.toFixed(1)) : '—'
   const displayUnit      = widget.unit ?? sensor?.unit ?? ''
   const showLabel        = widget.showLabel ?? true
   const showValue        = widget.showValue ?? true
@@ -121,27 +122,34 @@ export const SensorGaugeWidget: React.FC<Props> = ({ widget, snapshot }) => {
               )}
             </>
           )}
-          {/* Value label */}
-          {showValue && (
+          {/* Value + unit (same line, baseline-aligned so the unit sits at the
+              bottom of the value instead of being vertically centered on it) */}
+          {(showValue || (showUnit && displayUnit)) && (
           <text
-            x={cx} y={cy - 2}
-            textAnchor="middle" dominantBaseline="middle"
-            fill={color} fontSize={fontSize} fontWeight={valueBold ? 'bold' : 'normal'}
-            fontStyle={valueItalic ? 'italic' : 'normal'}
-            fontFamily={valueFontFamily ?? 'Inter, system-ui, sans-serif'}
+            x={cx} y={cy - 2 + fontSize * 0.4}
+            textAnchor="middle" dominantBaseline="baseline"
           >
-            {displayValue}
-          </text>
-          )}
-          {showUnit && displayUnit && (
-          <text
-            x={cx} y={cy + 11}
-            textAnchor="middle" dominantBaseline="middle"
-            fill={unitColor} fontSize={unitFontSize} fontWeight={unitBold ? 'bold' : 'normal'}
-            fontStyle={unitItalic ? 'italic' : 'normal'}
-            fontFamily={unitFontFamily ?? 'Inter, system-ui, sans-serif'}
-          >
-            {displayUnit}
+            {showValue && (
+            <tspan
+              fill={color} fontSize={fontSize}
+              fontWeight={valueBold ? 'bold' : 'normal'}
+              fontStyle={valueItalic ? 'italic' : 'normal'}
+              fontFamily={valueFontFamily ?? 'Inter, system-ui, sans-serif'}
+            >
+              {displayValue}
+            </tspan>
+            )}
+            {showUnit && displayUnit && (
+            <tspan
+              dx={showValue ? 4 : 0}
+              fill={unitColor} fontSize={unitFontSize}
+              fontWeight={unitBold ? 'bold' : 'normal'}
+              fontStyle={unitItalic ? 'italic' : 'normal'}
+              fontFamily={unitFontFamily ?? 'Inter, system-ui, sans-serif'}
+            >
+              {displayUnit}
+            </tspan>
+            )}
           </text>
           )}
         </svg>

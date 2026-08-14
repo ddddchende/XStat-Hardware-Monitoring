@@ -90,6 +90,8 @@ interface Props {
   onCanvasSelect?: () => void
   /** Canvas zoom factor (the wrapper is CSS-scaled); drag deltas must be divided by it. */
   zoom?: number
+  /** Locked canvas — widgets can be selected but never dragged or resized. */
+  locked?: boolean
 }
 
 export const PanelCanvas: React.FC<Props> = ({
@@ -104,6 +106,7 @@ export const PanelCanvas: React.FC<Props> = ({
   onPanStart,
   onCanvasSelect,
   zoom,
+  locked = false,
 }) => {
   const theme = useTheme()
 
@@ -158,7 +161,15 @@ export const PanelCanvas: React.FC<Props> = ({
 
       // ── Group move: primary widget snaps; members follow the same delta ──
       if (op.kind === 'move') {
-        let x = op.ox + dx, y = op.oy + dy
+        let dxm = dx, dym = dy
+        let lock: 'x' | 'y' | null = null
+        if (e.shiftKey) {
+          // Photoshop-style axis lock: Shift restricts movement to the axis
+          // with the larger displacement from the drag start.
+          if (Math.abs(dxm) >= Math.abs(dym)) { dym = 0; lock = 'x' }
+          else { dxm = 0; lock = 'y' }
+        }
+        let x = op.ox + dxm, y = op.oy + dym
         if (snapRef.current) {
           const G = 20
           x = Math.round(x / G) * G
@@ -170,16 +181,19 @@ export const PanelCanvas: React.FC<Props> = ({
         const snap = smartSnap(x, y, op.ow, op.oh, others, op.id, canvasSizeRef.current.w, canvasSizeRef.current.h)
         x = snap.x
         y = snap.y
-        const ddx = x - (op.ox + dx)   // snap adjustment applied to the whole group
-        const ddy = y - (op.oy + dy)
+        // While axis-locked, never let smart-snap shift the locked axis
+        if (lock === 'x') y = op.oy + dym
+        if (lock === 'y') x = op.ox + dxm
+        const ddx = x - (op.ox + dxm)   // snap adjustment applied to the whole group
+        const ddy = y - (op.oy + dym)
 
         const final = op.final ?? (op.final = new Map())
         final.set(op.id, { x, y })
         setGeom(op.id, x, y, op.ow, op.oh)
         for (const g of op.group ?? []) {
           if (g.id === op.id) continue
-          const mx = g.x + dx + ddx
-          const my = g.y + dy + ddy
+          const mx = g.x + dxm + ddx
+          const my = g.y + dym + ddy
           final.set(g.id, { x: mx, y: my })
           setGeom(g.id, mx, my, g.w, g.h)
         }
@@ -395,6 +409,11 @@ export const PanelCanvas: React.FC<Props> = ({
                 onMouseDown={e => {
                   if (e.button !== 0) return
                   const additive = e.ctrlKey || e.metaKey
+                  if (locked) {
+                    // Locked canvas: clicking still selects, never starts a drag.
+                    onSelect(widget.id, additive)
+                    return
+                  }
                   if (additive) {
                     // Ctrl+click on an already-selected widget → deselect only
                     if (selectedWidgetIds.includes(widget.id)) {
@@ -425,7 +444,7 @@ export const PanelCanvas: React.FC<Props> = ({
             )}
 
             {/* 8-direction resize handles — visible only on the primary (last-selected) widget */}
-            {isEditMode && selected && primaryId === widget.id && HANDLES.map(({ dir, style }) => (
+            {isEditMode && !locked && selected && primaryId === widget.id && HANDLES.map(({ dir, style }) => (
               <Box
                 key={dir}
                 component="div"

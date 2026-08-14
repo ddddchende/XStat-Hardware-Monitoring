@@ -13,6 +13,7 @@ dist-electron/
 out/
 .vite/
 *.log
+.electron-cache/
 
 # Panel builds
 panels/**/dist/

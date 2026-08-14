@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import * as signalR from '@microsoft/signalr'
 import type { HardwareSnapshot } from '@/types/sensors'
+import type { PanelSubscribeRule } from './PanelSubscriptionContext'
 
 /**
  * Variant of useSensors that derives the hub URL from window.location.origin
@@ -11,8 +12,12 @@ export function usePanelSensors() {
   const [connected, setConnected] = useState(false)
   const [error, setError]         = useState<string | null>(null)
   const [layoutJson, setLayoutJson] = useState<string | null>(null)
+  // Server-side history (up to 60s) pulled once after subscribing — used to seed charts.
+  const [historySeed, setHistorySeed] = useState<HardwareSnapshot[] | null>(null)
   const hubRef       = useRef<signalR.HubConnection | null>(null)
   const cleanedUpRef = useRef(false)
+  // null = 未订阅（服务端推全量，兼容旧逻辑）；'all' = 明确要全量；数组 = 只订阅这些传感器
+  const subscriptionRef = useRef<PanelSubscribeRule[] | 'all' | null>(null)
 
   // Fetch the panel layout once on mount so the LAN panel shows the right view at load.
   useEffect(() => {
@@ -21,6 +26,35 @@ export function usePanelSensors() {
       .then(json => { if (json) setLayoutJson(json) })
       .catch(() => {})
   }, [])
+
+  // Push the current subscription to the service, then pull the history window
+  // (reduced to the subscribed sensors). Safe to call before/after connection.
+  const applySubscription = useCallback(async () => {
+    const hub = hubRef.current
+    if (!hub) return
+    try {
+      const sub = subscriptionRef.current
+      if (sub === 'all' || sub === null) {
+        await hub.invoke('SubscribeAll')
+      } else {
+        // 字符串规则 → sensorIds；对象规则 → conditions（与服务端 SensorFilter 对齐）
+        const sensorIds: string[] = []
+        const conditions: Record<string, string>[] = []
+        for (const rule of sub) {
+          if (typeof rule === 'string') sensorIds.push(rule)
+          else conditions.push(rule)
+        }
+        await hub.invoke('Subscribe', { sensorIds, conditions })
+      }
+      const history = await hub.invoke('GetHistory')
+      if (Array.isArray(history) && history.length > 0) setHistorySeed(history)
+    } catch { /* 连接尚未就绪时忽略；connect() 完成后再调用 */ }
+  }, [])
+
+  const setSubscription = useCallback((rules: PanelSubscribeRule[] | 'all' | null) => {
+    subscriptionRef.current = rules
+    applySubscription()
+  }, [applySubscription])
 
   const connect = useCallback(async () => {
     if (hubRef.current) return
@@ -39,11 +73,18 @@ export function usePanelSensors() {
       setError(null)
     })
 
+    hub.on('SensorHistory', (history: HardwareSnapshot[]) => {
+      if (Array.isArray(history) && history.length > 0) setHistorySeed(history)
+    })
+
     hub.on('LayoutUpdated', (json: string) => {
       setLayoutJson(json)
     })
 
-    hub.onreconnected(() => setConnected(true))
+    hub.onreconnected(() => {
+      setConnected(true)
+      applySubscription()
+    })
     hub.onclose(() => setConnected(false))
     hubRef.current = hub
 
@@ -52,6 +93,7 @@ export function usePanelSensors() {
       if (!cleanedUpRef.current) {
         setConnected(true)
         setError(null)
+        await applySubscription()
       }
     } catch {
       if (hubRef.current === hub) hubRef.current = null
@@ -60,7 +102,7 @@ export function usePanelSensors() {
         setError('Cannot reach XStat service.')
       }
     }
-  }, [])
+  }, [applySubscription])
 
   useEffect(() => {
     connect()
@@ -72,5 +114,5 @@ export function usePanelSensors() {
     }
   }, [connect])
 
-  return { snapshot, connected, error, layoutJson }
+  return { snapshot, connected, error, layoutJson, historySeed, setSubscription }
 }

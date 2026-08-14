@@ -1,16 +1,29 @@
 import React, { useEffect, useState } from 'react'
 import { Box, Typography } from '@mui/material'
+import SvgIcon, { type SvgIconProps } from '@mui/material/SvgIcon'
 import MemoryIcon from '@mui/icons-material/Memory'
 import SettingsInputComponentIcon from '@mui/icons-material/SettingsInputComponent'
-import StorageIcon from '@mui/icons-material/Storage'
 import DnsIcon from '@mui/icons-material/Dns'
 import InfoIcon from '@mui/icons-material/Info'
 import AccessTimeIcon from '@mui/icons-material/AccessTime'
 import type { PanelWidget } from '@/types/panel'
+import type { DiskInfo } from '@/types/systemInfo'
 import { useSystemInfo } from '@/hooks/useSystemInfo'
 
 interface Props {
   widget: PanelWidget
+}
+
+/** Hard-drive glyph (this MUI version ships no HardDrive icon). */
+function HardDriveIcon(props: SvgIconProps) {
+  return (
+    <SvgIcon {...props}>
+      <path
+        fillRule="evenodd"
+        d="M6 3h12a3 3 0 0 1 3 3v12a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3zm0 2a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1H6zm6 5a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm0 2a2 2 0 1 1 0 4 2 2 0 0 1 0-4zM8 7h2v2H8V7z"
+      />
+    </SvgIcon>
+  )
 }
 
 function formatBytes(bytes: number): string {
@@ -51,6 +64,7 @@ export const SystemInfoWidget: React.FC<Props> = ({ widget }) => {
   const showIcons   = widget.sysShowIcons    ?? true
   const iconColor   = widget.sysIconColor    ?? widget.accentColor ?? '#03dac6'
   const disksToShow = widget.sysDisksToShow ?? []
+  const diskFormat  = widget.sysDiskFormat  ?? 'model'
   const align       = widget.sysTextAlign   ?? 'left'
 
   // Uptime comes from the backend as a base value; tick it locally every second
@@ -127,28 +141,44 @@ export const SystemInfoWidget: React.FC<Props> = ({ widget }) => {
     rows.push({ icon: <AccessTimeIcon sx={{ fontSize: 14, color: iconColor }} />, label: 'Uptime', value: formatUptime(uptime) })
   }
   if (showDisks && info.disks.length > 0) {
-    for (const d of info.disks) {
-      if (!d.driveLetter) continue
-      // When sysDisksToShow is configured (non-empty), only render the selected drives.
-      if (disksToShow.length > 0 && !disksToShow.includes(d.driveLetter)) continue
-      const label = `${d.driveLetter} ${d.label || ''}`.trim()
-      const model = d.model ? ` ${d.model}` : ''
-      const type  = d.type  ? ` [${d.type}]`  : ''
+    // Group partitions by physical disk (same model), then render one row per
+    // disk as "Model | Type (Letter) (Letter)" — no partition names or sizes.
+    const filtered = info.disks.filter(d => {
+      if (!d.driveLetter) return false
+      if (disksToShow.length > 0 && !disksToShow.includes(d.driveLetter)) return false
+      return true
+    })
+    const groups = new Map<string, DiskInfo[]>()
+    for (const d of filtered) {
+      const key = d.model || d.driveLetter
+      const arr = groups.get(key) ?? []
+      arr.push(d)
+      groups.set(key, arr)
+    }
+    for (const disks of groups.values()) {
+      const first = disks[0]
+      if (diskFormat === 'name') {
+        // "D: 资源" — first partition's letter (already includes ":") + name only
+        // Empty volume name falls back to Windows' default "本地磁盘" (Local Disk).
+        rows.push({
+          icon: <HardDriveIcon sx={{ fontSize: 14, color: iconColor }} />,
+          label: 'Disk',
+          value: `${first.driveLetter}${first.label ? ` ${first.label}` : ' 本地磁盘'}`,
+        })
+        continue
+      }
+      // "Model | Type (D:) (E:)" — model summary with all partitions
+      const letters = disks.map(d => d.driveLetter).sort().map(l => `(${l})`).join(' ')
+      const type    = first.type ? `${first.type} ` : ''
       rows.push({
-        icon: <StorageIcon sx={{ fontSize: 14, color: iconColor }} />,
-        label,
-        value: `${formatBytes(d.totalBytes)}${model}${type}`.trim(),
+        icon: <HardDriveIcon sx={{ fontSize: 14, color: iconColor }} />,
+        label: 'Disk',
+        value: `${first.model} | ${type}${letters}`.trim(),
       })
     }
   }
 
-  // When neither icons nor labels are shown, no header row is rendered; the value
-  // shouldn't carry the 2.5-unit left padding reserved for the icon+label column.
-  const headerVisible = showIcons || showLabels
-  // Left-aligned rows indent the value to align under the title text (past the
-  // icon). Centered / right-aligned rows drop the indent so the value lines up
-  // with the title block instead.
-  const indentValue = headerVisible && align === 'left'
+  // Icon + title + value share one line; alignment controls the whole row.
   const headerJustify = align === 'center' ? 'center' : align === 'right' ? 'flex-end' : 'flex-start'
 
   return (
@@ -168,19 +198,16 @@ export const SystemInfoWidget: React.FC<Props> = ({ widget }) => {
           key={i}
           sx={{
             display: 'flex',
-            flexDirection: 'column',
-            gap: 0.25,
+            alignItems: 'center',
+            gap: 0.75,
+            justifyContent: headerJustify,
             borderBottom: i < rows.length - 1 ? '1px solid rgba(255,255,255,0.06)' : 'none',
             pb: 0.5,
           }}
         >
-          {headerVisible && (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, justifyContent: headerJustify }}>
-              {showIcons && row.icon}
-              {showLabels && <Typography component="span" sx={{ ...labelStyle }}>{row.label}</Typography>}
-            </Box>
-          )}
-          <Typography component="div" sx={{ ...valueStyle, pl: indentValue ? 2.5 : 0, textAlign: align }}>{row.value}</Typography>
+          {showIcons && row.icon}
+          {showLabels && <Typography component="span" sx={{ ...labelStyle, flexShrink: 0 }}>{row.label}</Typography>}
+          <Typography component="div" sx={{ ...valueStyle, flex: 1, minWidth: 0, textAlign: align }}>{row.value}</Typography>
         </Box>
       ))}
     </Box>

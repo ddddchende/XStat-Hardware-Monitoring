@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { PanelCanvas }      from '@/components/PanelCanvas'
 import { useSensorHistory } from '@/hooks/useSensorHistory'
 import { usePanelSensors }  from './usePanelSensors'
+import { PanelSubscriptionContext, type PanelSubscribeRule } from './PanelSubscriptionContext'
 import type { PanelLayout } from '@/types/panel'
 
 const EMPTY_PANEL: PanelLayout = {
@@ -57,10 +58,21 @@ const GettingStarted: React.FC<{ loading: boolean }> = ({ loading }) => (
 )
 
 export const PanelApp: React.FC = () => {
-  const { snapshot, layoutJson } = usePanelSensors()
-  const history = useSensorHistory(snapshot)
+  const { snapshot, layoutJson, historySeed, setSubscription } = usePanelSensors()
+  const history = useSensorHistory(snapshot, historySeed)
   const hostRef  = useRef<HTMLDivElement>(null)
   const [fit, setFit] = useState(1)
+
+  // 自定义控件声明的服务端订阅贡献：widgetId → 规则数组 或 'all'（旧控件未声明 → 需要全量）
+  const [customSubs, setCustomSubs] = useState<Record<string, PanelSubscribeRule[] | 'all'>>({})
+  const registerSubscribe = useCallback((widgetId: string, rules: PanelSubscribeRule[] | 'all' | null) => {
+    setCustomSubs(prev => {
+      const next = { ...prev }
+      if (rules === null) delete next[widgetId]
+      else next[widgetId] = rules
+      return next
+    })
+  }, [])
 
   const panel = useMemo<PanelLayout>(() => {
     if (!layoutJson) return EMPTY_PANEL
@@ -70,6 +82,25 @@ export const PanelApp: React.FC = () => {
       return EMPTY_PANEL
     }
   }, [layoutJson])
+
+  // 汇总整个面板对服务端传感器的需求并上报：
+  //  - 各传感器控件绑定的 sensorId
+  //  - 自定义控件声明的订阅（或未声明 → 需要全量）
+  //  - SensorList 控件列出所有传感器 → 需要全量
+  // 服务端据此只推送订阅的传感器，大幅减小 ws 流量（无布局时订阅空集，几乎零流量）。
+  useEffect(() => {
+    const ids: PanelSubscribeRule[] = []
+    let needAll = false
+    for (const w of panel.widgets) {
+      if (w.sensorId) ids.push(w.sensorId)
+      if (w.type === 'SensorList') needAll = true
+    }
+    for (const rules of Object.values(customSubs)) {
+      if (rules === 'all') needAll = true
+      else ids.push(...rules)
+    }
+    setSubscription(needAll ? 'all' : Array.from(new Set(ids)))
+  }, [panel, customSubs, setSubscription])
 
   // Auto-fit: scale the fixed-size canvas to the viewport ("contain"), so the
   // whole panel is always visible on phones / tablets / TVs without scrolling.
@@ -119,16 +150,18 @@ export const PanelApp: React.FC = () => {
           touchAction: 'pan-x pan-y',
         }}
       >
-        <PanelCanvas
-          panel={panel}
-          snapshot={snapshot}
-          history={history}
-          isEditMode={false}
-          snapToGrid={false}
-          selectedWidgetIds={[]}
-          onSelect={() => {}}
-          onWidgetGeometries={() => {}}
-        />
+        <PanelSubscriptionContext.Provider value={registerSubscribe}>
+          <PanelCanvas
+            panel={panel}
+            snapshot={snapshot}
+            history={history}
+            isEditMode={false}
+            snapToGrid={false}
+            selectedWidgetIds={[]}
+            onSelect={() => {}}
+            onWidgetGeometries={() => {}}
+          />
+        </PanelSubscriptionContext.Provider>
       </div>
     </div>
   )

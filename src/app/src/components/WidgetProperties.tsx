@@ -19,9 +19,10 @@ import KeyboardDoubleArrowUpIcon    from '@mui/icons-material/KeyboardDoubleArro
 import KeyboardArrowUpIcon          from '@mui/icons-material/KeyboardArrowUp'
 import KeyboardArrowDownIcon        from '@mui/icons-material/KeyboardArrowDown'
 import KeyboardDoubleArrowDownIcon  from '@mui/icons-material/KeyboardDoubleArrowDown'
-import type { PanelWidget, LayoutItem } from '@/types/panel'
+import type { PanelWidget, LayoutItem, BoxAnimation } from '@/types/panel'
 import type { HardwareSnapshot, SensorReading } from '@/types/sensors'
 import { SensorPickerDialog }   from '@/components/SensorPickerDialog'
+import { boxEffectSupportsRandom } from '@/components/widgets/boxEffects'
 import { useSystemInfo } from '@/hooks/useSystemInfo'
 import { useFonts } from '@/hooks/useFonts'
 
@@ -875,6 +876,17 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
             onFontFamilyChange={f => onUpdate({ valueFontFamily: f || undefined })}
             onItalicChange={i => onUpdate({ valueItalic: i })}
           />
+          {widget.type === 'SensorGauge' && (widget.showValue ?? true) && (
+            <FormControlLabel
+              control={
+                <Switch size="small"
+                  checked={widget.hideDecimals ?? false}
+                  onChange={e => onUpdate({ hideDecimals: e.target.checked })}
+                />
+              }
+              label={<Typography variant="body2">{t('widgetProperties.hideDecimals')}</Typography>}
+            />
+          )}
           {(widget.type === 'SensorValue' || widget.type === 'SensorGauge') && (
             <>
               <Divider />
@@ -1074,6 +1086,90 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
               sx={{ width: '100%', accentColor: 'primary.main', cursor: 'pointer' }}
             />
           </Box>
+
+          {/* Background animation */}
+          <FormControlLabel
+            control={<Switch size="small" checked={widget.boxAnimate ?? false} onChange={e => onUpdate({ boxAnimate: e.target.checked })} />}
+            label={t('widgetProperties.boxAnimate')}
+            sx={{ m: 0 }}
+          />
+          {(widget.boxAnimate ?? false) && (
+            <>
+              <FormControl size="small" fullWidth>
+                <InputLabel>{t('widgetProperties.boxAnimation')}</InputLabel>
+                <Select
+                  value={widget.boxAnimation ?? 'grid'}
+                  label={t('widgetProperties.boxAnimation')}
+                  onChange={e => onUpdate({ boxAnimation: e.target.value as BoxAnimation })}
+                >
+                  <MenuItem value="grid">{t('widgetProperties.boxAnimationGrid')}</MenuItem>
+                  <MenuItem value="rain">{t('widgetProperties.boxAnimationRain')}</MenuItem>
+                  <MenuItem value="blob">{t('widgetProperties.boxAnimationBlob')}</MenuItem>
+                  <MenuItem value="neon">{t('widgetProperties.boxAnimationNeon')}</MenuItem>
+                  <MenuItem value="cyber">{t('widgetProperties.boxAnimationCyber')}</MenuItem>
+                  <MenuItem value="matrix">{t('widgetProperties.boxAnimationMatrix')}</MenuItem>
+                  <MenuItem value="green">{t('widgetProperties.boxAnimationGreen')}</MenuItem>
+                  <MenuItem value="scan">{t('widgetProperties.boxAnimationScan')}</MenuItem>
+                  <MenuItem value="cyan">{t('widgetProperties.boxAnimationCyan')}</MenuItem>
+                </Select>
+              </FormControl>
+              {/* Effect speed */}
+              <Box>
+                <SectionLabel>{t('widgetProperties.boxEffectSpeed', { speed: (widget.boxEffectSpeed ?? 1).toFixed(1) })}</SectionLabel>
+                <Box
+                  component="input"
+                  type="range"
+                  min={10}
+                  max={300}
+                  step={5}
+                  value={Math.round((widget.boxEffectSpeed ?? 1) * 100)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    onUpdate({ boxEffectSpeed: Number(e.target.value) / 100 })
+                  }
+                  sx={{ width: '100%', accentColor: 'primary.main', cursor: 'pointer' }}
+                />
+              </Box>
+              {/* Effect color */}
+              <Box>
+                <SectionLabel>{t('widgetProperties.boxEffectColor')}</SectionLabel>
+                <ColorSwatchesPicker
+                  value={widget.boxEffectColor ?? ''}
+                  onChange={c => onUpdate({ boxEffectColor: c })}
+                />
+                <TextField
+                  size="small"
+                  fullWidth
+                  label={t('widgetProperties.customHex')}
+                  value={widget.boxEffectColor ?? ''}
+                  onChange={e => onUpdate({ boxEffectColor: e.target.value || undefined })}
+                  inputProps={{ spellCheck: false }}
+                  sx={{ '& .MuiInputBase-input': { fontFamily: 'monospace', fontSize: '0.8rem' } }}
+                />
+              </Box>
+              {/* Random colors — only where the effect is random by default */}
+              {boxEffectSupportsRandom(widget.boxAnimation ?? 'grid') && (
+                <FormControlLabel
+                  control={<Switch size="small" checked={widget.boxEffectRandom ?? false} onChange={e => onUpdate({ boxEffectRandom: e.target.checked })} />}
+                  label={t('widgetProperties.boxEffectRandom')}
+                  sx={{ m: 0 }}
+                />
+              )}
+              <Box>
+                <SectionLabel>{t('widgetProperties.boxEffectOpacity', { pct: widget.boxEffectOpacity ?? 100 })}</SectionLabel>
+                <Box
+                  component="input"
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={widget.boxEffectOpacity ?? 100}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    onUpdate({ boxEffectOpacity: Number(e.target.value) })
+                  }
+                  sx={{ width: '100%', accentColor: 'primary.main', cursor: 'pointer' }}
+                />
+              </Box>
+            </>
+          )}
         </Box>
       )}
 
@@ -1147,6 +1243,21 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
 
           {(widget.sysShowDisks ?? true) && (
             <Box sx={{ mt: 0.5 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                <Typography variant="caption" sx={{ color: 'text.secondary', flexShrink: 0 }}>
+                  {t('widgetProperties.sysDiskFormat')}
+                </Typography>
+                <ToggleButtonGroup
+                  size="small"
+                  exclusive
+                  fullWidth
+                  value={widget.sysDiskFormat ?? 'model'}
+                  onChange={(_, v) => v && onUpdate({ sysDiskFormat: v })}
+                >
+                  <ToggleButton value="model">{t('widgetProperties.sysDiskFormatModel')}</ToggleButton>
+                  <ToggleButton value="name">{t('widgetProperties.sysDiskFormatName')}</ToggleButton>
+                </ToggleButtonGroup>
+              </Box>
               <SectionLabel>{t('widgetProperties.sysDisksToShow')}</SectionLabel>
               <Autocomplete
                 multiple
@@ -1226,8 +1337,8 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
             min={8}
             max={24}
             value={widget.fontSize ?? 11}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-              onUpdate({ fontSize: Number(e.target.value) })
+            onChange={(_, value) =>
+              onUpdate({ fontSize: Number(value) })
             }
             sx={{ width: '100%', accentColor: 'primary.main', cursor: 'pointer' }}
           />

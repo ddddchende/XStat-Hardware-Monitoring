@@ -242,3 +242,53 @@ layout();
 - `unit` 已含单位符号（`°C` / `%` / `MHz` / `GB` / `W` / `V` / `RPM` / `Mbps` / `×`），直接显示即可
 - 百分比类（Load）合理范围 0–100，可直接做进度条/仪表；温度/频率/功率按需设 max
 - 实时数据在 `/api/sensors`（JSON）可人工核对当前机器实际有哪些传感器
+
+## 9. 按需订阅与自动推断
+
+> XStat 会按需推送：**控件收到的 `sensors` 只是服务端按"面板实际用到的传感器"过滤后的子集**，而不是全部 300+ 个传感器（减小 LAN 带宽和内存开销）。
+
+### 自动推断（无需手动配置）
+
+面板加载时，XStat **自动扫描控件 HTML 里的查找逻辑**，推断它需要哪些传感器：
+
+- 识别 `s.category === 'CPU'`、`s.type === 'Power'`、`s.name === 'cpu package'` 这类字段比较（含 `!==` 排除式），组合成精确规则
+- 兜底识别 `keywords.some(k => name === k)` 这类数组匹配写法（提取含传感器关键词的多词字符串）
+- 显式声明（见下）优先于自动推断
+
+### 控件显示 `--` 的排查
+
+自动推断能覆盖绝大多数常规写法。若控件一直显示 `--`（拿不到数据），大概率是**非标准写法**导致推断抓不到，例如：
+
+- 条件写在别的变量/函数里，与 `sensors` 无直接字段比较
+- 用 `indexOf` / `includes` / 动态拼接等运行时方式匹配
+- 混淆、压缩过的脚本
+
+### 显式声明兜底（罕见情况）
+
+推断失败时，在控件脚本里**主动声明自己需要的传感器**即可，一行代码：
+
+```html
+<script>
+  // 按字段条件匹配：category/type/name/id/hardwareName/unit（大小写不敏感包含匹配）
+  window.parent.postMessage({
+    __xstatSubscribe: [
+      { category: 'CPU', type: 'Power' },   // 例如 CPU 功耗
+      { name: 'GPU Memory Total' }          // 例如按名称
+    ]
+  }, '*');
+</script>
+```
+
+也支持按 id：
+
+```js
+window.parent.postMessage({ __xstatSubscribe: ['cpu/intelcpu/0/power/0'] }, '*');
+```
+
+不需要实时数据时可声明空数组（几乎零开销）：
+
+```js
+window.parent.postMessage({ __xstatSubscribe: [] }, '*');
+```
+
+> 提示：`window.parent.postMessage({ __xstatSubscribe: [...] }, '*')` 放在控件脚本**顶部**（其余查找逻辑之前）即可；控件 iframe 重建后脚本会重新执行，父页面会自动重新读取声明。
