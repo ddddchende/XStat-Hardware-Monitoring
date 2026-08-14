@@ -87,6 +87,8 @@
   "widgetProperties.accent": "强调色（条/线/弧）",
   "widgetProperties.colorHex": "颜色（十六进制）",
   "widgetProperties.fontSize": "字号 (px)",
+  "widgetProperties.copySensorList": "复制传感器列表文本",
+  "widgetProperties.sensorListCopied": "已复制",
   "widgetProperties.bold": "粗体",
   "widgetProperties.italic": "斜体",
   "widgetProperties.fontFamily": "字体",

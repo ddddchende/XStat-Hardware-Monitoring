@@ -44,9 +44,11 @@ public sealed class SensorBroadcastService : BackgroundService
         _logger.LogInformation("SensorBroadcastService started. Poll interval: {Interval}ms",
             _pollIntervalMs);
 
-        // Slow collector: refreshes the storage/NIC sensor cache on a background
+        // Slow collector: refreshes the storage sensor cache on a background
         // thread. A single SMART query can take ~1s per disk (5 disks = 5.6s), so
         // this runs on its own 5s cadence and never blocks the hot path.
+        // Network adapters are not here — they're read inline in GetSnapshot() at
+        // the configured poll rate.
         var slowTask = Task.Run(async () =>
         {
             while (!stoppingToken.IsCancellationRequested)
@@ -63,9 +65,9 @@ public sealed class SensorBroadcastService : BackgroundService
             }
         }, stoppingToken);
 
-        // Fast collector: refreshes CPU/GPU/RAM/motherboard on the poll interval.
-        // GetSnapshot() merges the slow-hardware cache populated above, so it stays
-        // cheap (~85ms) regardless of how many disks/NICs are present.
+        // Fast collector: refreshes CPU/GPU/RAM/motherboard/network on the poll
+        // interval. GetSnapshot() merges the slow-hardware (storage) cache
+        // populated above, so it stays cheap regardless of how many disks are present.
         var collectTask = Task.Run(async () =>
         {
             while (!stoppingToken.IsCancellationRequested)

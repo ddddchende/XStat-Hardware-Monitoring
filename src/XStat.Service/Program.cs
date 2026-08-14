@@ -87,7 +87,9 @@ app.MapHub<SensorHub>("/hubs/sensors");
 // Browsers always auto-request /favicon.ico — redirect to the actual icon file.
 app.MapGet("/favicon.ico", () => Results.Redirect("/icon.ico", permanent: true));
 
-// Health check — Electron uses this to know the service is ready.
+// Health check — Electron uses this to know the service is ready. It also
+// reports the running process's id + executable path so the Electron shell can
+// detect a stale service from an older install occupying the port and replace it.
 app.MapGet("/health", () =>
 {
     bool isAdmin = OperatingSystem.IsWindows()
@@ -95,7 +97,14 @@ app.MapGet("/health", () =>
               System.Security.Principal.WindowsIdentity.GetCurrent())
           .IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator)
         : true;
-    return Results.Ok(new { status = "ok", version = "0.1.0", isAdmin });
+    return Results.Ok(new
+    {
+        status = "ok",
+        version = "0.1.0",
+        isAdmin,
+        processId = Environment.ProcessId,
+        executablePath = Environment.ProcessPath
+    });
 });
 
 app.Run();

@@ -13,12 +13,14 @@ public sealed class HardwareMonitor : IDisposable
     private readonly ILogger<HardwareMonitor> _logger;
     private bool _disposed;
 
-    // Slow hardware (storage SMART + NICs) is collected on a background thread by
+    // Slow hardware (storage SMART) is collected on a background thread by
     // SensorBroadcastService, because a single SMART query can take ~1s per disk and
     // 5 disks serially = 5.6s — far too slow for the hot path. The background collector
-    // refreshes this cache; GetSnapshot() just reads it.
+    // refreshes this cache; GetSnapshot() just reads it. NIC throughput is cheap to
+    // read, so network adapters are collected inline in GetSnapshot() at the
+    // configured poll rate instead of on this slow cadence.
     private static bool IsSlowHardware(HardwareType t) =>
-        t == HardwareType.Storage || t == HardwareType.Network;
+        t == HardwareType.Storage;
 
     private readonly object _slowLock = new();
     private List<SensorReading> _slowReadings = new();
@@ -77,9 +79,9 @@ public sealed class HardwareMonitor : IDisposable
     {
         var raw = new List<SensorReading>();
 
-        // Fast hardware only — CPU/GPU/RAM/motherboard. Update every call (cheap).
-        // Storage/NIC are skipped here; they're refreshed by UpdateSlowHardware() on
-        // a background thread and merged from the cache below.
+        // Fast hardware — CPU/GPU/RAM/motherboard/network. Update every call (cheap;
+        // NIC throughput reads are fast). Storage is skipped here; it's refreshed by
+        // UpdateSlowHardware() on a background thread and merged from the cache below.
         var sw = Stopwatch.StartNew();
         var timings = new List<(string, string, double)>();
         foreach (var hw in _computer.Hardware)
@@ -164,49 +166,48 @@ public sealed class HardwareMonitor : IDisposable
     /// throughput into a single pair of sensors ("Total Upload Speed" /
     /// "Total Download Speed", hardware "Network Total") so the UI — panels, the
     /// sensor picker and custom widgets — can show the aggregate traffic of all
-    /// adapters at once. Only adds a total when at least one NIC of that direction
-    /// actually reported a value.
+    /// adapters at once. The pair is always emitted (a direction that can't be
+    /// identified, or no NIC at all, simply totals to 0) so the sensors are
+    /// guaranteed to show up in the sensor picker.
     /// </summary>
     private static List<SensorReading> AddTotalNetworkThroughput(List<SensorReading> sensors)
     {
         float totalUl = 0f, totalDl = 0f;
-        bool hasUl = false, hasDl = false;
         foreach (var s in sensors)
         {
             if (s.Category != "Network" || s.Type != "Throughput" || s.Value is null) continue;
-            if (s.Name.Contains("upload", StringComparison.OrdinalIgnoreCase)) { totalUl += s.Value.Value; hasUl = true; }
-            else if (s.Name.Contains("download", StringComparison.OrdinalIgnoreCase)) { totalDl += s.Value.Value; hasDl = true; }
+            if (s.Name.Contains("upload", StringComparison.OrdinalIgnoreCase)) totalUl += s.Value.Value;
+            else if (s.Name.Contains("download", StringComparison.OrdinalIgnoreCase)) totalDl += s.Value.Value;
         }
-        if (!hasUl && !hasDl) return sensors;
 
         var result = new List<SensorReading>(sensors);
-        if (hasUl)
-            result.Add(new SensorReading(
-                Id: "network/total/upload_speed",
-                Name: "Total Upload Speed",
-                Category: "Network",
-                Type: "Throughput",
-                Value: (float)Math.Round(totalUl, 2),
-                Unit: "Mbps",
-                HardwareName: "Network Total"
-            ));
-        if (hasDl)
-            result.Add(new SensorReading(
-                Id: "network/total/download_speed",
-                Name: "Total Download Speed",
-                Category: "Network",
-                Type: "Throughput",
-                Value: (float)Math.Round(totalDl, 2),
-                Unit: "Mbps",
-                HardwareName: "Network Total"
-            ));
+        result.Add(new SensorReading(
+            Id: "network/total/upload_speed",
+            Name: "Total Upload Speed",
+            Category: "Network",
+            Type: "Throughput",
+            Value: (float)Math.Round(totalUl, 2),
+            Unit: "Mbps",
+            HardwareName: "Network Total"
+        ));
+        result.Add(new SensorReading(
+            Id: "network/total/download_speed",
+            Name: "Total Download Speed",
+            Category: "Network",
+            Type: "Throughput",
+            Value: (float)Math.Round(totalDl, 2),
+            Unit: "Mbps",
+            HardwareName: "Network Total"
+        ));
         return result;
     }
 
     /// <summary>
-    /// Collects slow hardware (storage SMART + network adapters) into the cache.
+    /// Collects slow hardware (storage SMART) into the cache.
     /// Meant to be called on a background thread by SensorBroadcastService, since
     /// SMART queries can take ~1s per disk and block the hot path otherwise.
+    /// Network adapters are intentionally NOT here — they're read inline in
+    /// GetSnapshot() at the configured poll rate.
     /// </summary>
     public void UpdateSlowHardware()
     {

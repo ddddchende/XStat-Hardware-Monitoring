@@ -88,6 +88,8 @@ interface Props {
   onWidgetGeometries: (updates: GeomUpdate[]) => void
   onPanStart?: (e: React.MouseEvent) => void
   onCanvasSelect?: () => void
+  /** Canvas zoom factor (the wrapper is CSS-scaled); drag deltas must be divided by it. */
+  zoom?: number
 }
 
 export const PanelCanvas: React.FC<Props> = ({
@@ -101,6 +103,7 @@ export const PanelCanvas: React.FC<Props> = ({
   onWidgetGeometries,
   onPanStart,
   onCanvasSelect,
+  zoom,
 }) => {
   const theme = useTheme()
 
@@ -109,12 +112,14 @@ export const PanelCanvas: React.FC<Props> = ({
   const layoutRef = useRef(panel.layout)
   const geoRef    = useRef(onWidgetGeometries)
   const snapRef   = useRef(snapToGrid)
+  const zoomRef   = useRef(zoom ?? 1)
   const vGuideRef = useRef<HTMLDivElement | null>(null)
   const hGuideRef = useRef<HTMLDivElement | null>(null)
   const canvasSizeRef = useRef({ w: panel.canvasWidth, h: panel.canvasHeight })
   useEffect(() => { layoutRef.current = panel.layout },   [panel.layout])
   useEffect(() => { geoRef.current    = onWidgetGeometries }, [onWidgetGeometries])
   useEffect(() => { snapRef.current   = snapToGrid },       [snapToGrid])
+  useEffect(() => { zoomRef.current   = zoom ?? 1 },        [zoom])
   useEffect(() => { canvasSizeRef.current = { w: panel.canvasWidth, h: panel.canvasHeight } }, [panel.canvasWidth, panel.canvasHeight])
 
   // Pull fonts referenced by the panel from the service into this browser so
@@ -146,8 +151,10 @@ export const PanelCanvas: React.FC<Props> = ({
       const op = opRef.current
       if (!op) return
 
-      const dx = e.clientX - op.mx0
-      const dy = e.clientY - op.my0
+      // Client-space deltas → canvas-space (the wrapper is CSS-scaled by zoom)
+      const z = zoomRef.current
+      const dx = (e.clientX - op.mx0) / z
+      const dy = (e.clientY - op.my0) / z
 
       // ── Group move: primary widget snaps; members follow the same delta ──
       if (op.kind === 'move') {

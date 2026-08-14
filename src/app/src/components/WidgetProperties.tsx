@@ -20,7 +20,7 @@ import KeyboardArrowUpIcon          from '@mui/icons-material/KeyboardArrowUp'
 import KeyboardArrowDownIcon        from '@mui/icons-material/KeyboardArrowDown'
 import KeyboardDoubleArrowDownIcon  from '@mui/icons-material/KeyboardDoubleArrowDown'
 import type { PanelWidget, LayoutItem } from '@/types/panel'
-import type { HardwareSnapshot } from '@/types/sensors'
+import type { HardwareSnapshot, SensorReading } from '@/types/sensors'
 import { SensorPickerDialog }   from '@/components/SensorPickerDialog'
 import { useSystemInfo } from '@/hooks/useSystemInfo'
 import { useFonts } from '@/hooks/useFonts'
@@ -89,6 +89,32 @@ const COMMON_FONTS = [
   // 中文字体（Windows 系统自带）
   '微软雅黑', '宋体', '黑体', '楷体', '仿宋', '等线', '幼圆', '隶书',
 ]
+
+/** Text dump of every live sensor, grouped like the SensorList widget — for copying. */
+function buildSensorListText(snapshot: HardwareSnapshot | null): string {
+  const sensors = snapshot?.sensors ?? []
+  const lines: string[] = [`All Sensors (${sensors.length})`, '']
+  const cats = new Map<string, { hws: Map<string, SensorReading[]>; count: number }>()
+  for (const s of sensors) {
+    let cat = cats.get(s.category)
+    if (!cat) { cat = { hws: new Map(), count: 0 }; cats.set(s.category, cat) }
+    cat.count++
+    const list = cat.hws.get(s.hardwareName)
+    if (list) list.push(s)
+    else cat.hws.set(s.hardwareName, [s])
+  }
+  for (const [cat, g] of [...cats.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+    lines.push(`${cat} (${g.count})`)
+    for (const [hw, list] of g.hws) {
+      lines.push(`  ${hw}`)
+      for (const s of list) {
+        lines.push(`    ${s.name}   ${s.type}   ${s.value ?? '—'}   ${s.unit}`)
+      }
+    }
+    lines.push('')
+  }
+  return lines.join('\n').trim()
+}
 
 interface Props {
   widget: PanelWidget
@@ -298,6 +324,7 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
   const [sensorDialogOpen, setSensorDialogOpen] = useState(false)
   const [renamingWidget, setRenamingWidget] = useState(false)
   const [renameValue, setRenameValue] = useState('')
+  const [sensorListCopied, setSensorListCopied] = useState(false)
   // Shared system info cache — used to enumerate available disk drive letters
   // for the SystemInfo widget's per-disk visibility picker.
   const { info: sysInfo } = useSystemInfo()
@@ -1190,7 +1217,7 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
         </Box>
       )}
 
-      {/* ── SensorList widget — font size ───────────────────────── */}
+      {/* ── SensorList widget — font size + copy text ─────────────── */}
       {widget.type === 'SensorList' && (
         <Box>
           <SectionLabel>{t('widgetProperties.fontSize')}</SectionLabel>
@@ -1204,6 +1231,22 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
             }
             sx={{ width: '100%', accentColor: 'primary.main', cursor: 'pointer' }}
           />
+          <Button
+            size="small"
+            variant="outlined"
+            fullWidth
+            startIcon={<ContentCopyIcon sx={{ fontSize: 15 }} />}
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(buildSensorListText(snapshot))
+                setSensorListCopied(true)
+                window.setTimeout(() => setSensorListCopied(false), 1500)
+              } catch { /* clipboard unavailable */ }
+            }}
+            sx={{ mt: 1, textTransform: 'none', justifyContent: 'flex-start' }}
+          >
+            {sensorListCopied ? t('widgetProperties.sensorListCopied') : t('widgetProperties.copySensorList')}
+          </Button>
         </Box>
       )}
     </Box>

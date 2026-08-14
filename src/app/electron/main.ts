@@ -41,26 +41,81 @@ let widgetEditorData:   unknown = null
 
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Hardware Service Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
+/** The hardware service exe bundled with this app install. */
+function bundledServiceExePath(): string {
+  return IS_DEV
+    ? resolve(__dirname, '../../../XStat.Service/bin/Debug/net9.0/XStat.Service.exe')
+    : join(process.resourcesPath, 'service', 'XStat.Service.exe')
+}
+
+/** True when the running service is the one bundled with this install. */
+function isOurService(path?: string): boolean {
+  if (!path) return false
+  const normalize = (p: string) => p.replace(/\\/g, '/').toLowerCase()
+  return normalize(path) === normalize(bundledServiceExePath())
+}
+
+/** Stop a stale service occupying the port (Windows service + leftover process). */
+async function stopStaleService(pid?: number): Promise<void> {
+  // 1. Try the registered Windows service (no-op when it isn't installed).
+  await new Promise<void>((resolve) => {
+    const sc = spawn('sc.exe', ['stop', 'XStatHardwareSvc'], { stdio: 'ignore' })
+    sc.on('exit', () => resolve())
+    sc.on('error', () => resolve())
+  })
+  // 2. Kill by pid when the service reported one.
+  if (pid) { try { process.kill(pid) } catch { /* already gone */ } }
+  // 3. Force-kill any leftover XStat.Service.exe. This is the critical fallback:
+  //    stale services from older installs predate the /health processId field,
+  //    so we can't kill them by pid — without this the new service can never
+  //    bind the port and the old one keeps serving stale data forever.
+  await new Promise<void>((resolve) => {
+    const tk = spawn('taskkill.exe', ['/IM', 'XStat.Service.exe', '/F'], { stdio: 'ignore' })
+    tk.on('exit', () => resolve())
+    tk.on('error', () => resolve())
+  })
+  // 4. Wait for the port to free up.
+  const deadline = Date.now() + 5000
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch(SERVICE_URL + '/health')
+      if (!res.ok) return
+    } catch { return } // connection refused → port is free
+    await new Promise((r) => setTimeout(r, 200))
+  }
+}
+
 async function startService(): Promise<void> {
-  // 1. Reuse an already-running service (e.g. Windows Service or manually launched in dev)
+  // 1. Reuse an already-running service only when it's the version bundled with
+  //    this install. A stale service from an older install must be replaced,
+  //    otherwise backend changes (new sensors, fixes) never reach the UI.
+  let hadStale = false
   try {
     const controller = new AbortController()
     const tid = setTimeout(() => controller.abort(), 2000)
     const probe = await fetch(SERVICE_URL + '/health', { signal: controller.signal })
     clearTimeout(tid)
     if (probe.ok) {
-      const json = await probe.json() as { isAdmin?: boolean }
-      if (json.isAdmin !== false) {
+      const json = await probe.json() as { isAdmin?: boolean; processId?: number; executablePath?: string }
+      if (json.isAdmin !== false && isOurService(json.executablePath)) {
         console.log('[XStat] Reusing existing elevated service on', SERVICE_URL)
         return
       }
-      console.warn('[XStat] Found non-elevated service — stopping it and spawning elevated version.')
+      if (json.isAdmin !== false) {
+        console.warn('[XStat] Stale service detected (' + (json.executablePath ?? 'unknown') + ') — replacing with bundled version.')
+      } else {
+        console.warn('[XStat] Found non-elevated service — stopping it and spawning elevated version.')
+      }
+      hadStale = true
+      await stopStaleService(json.processId)
     }
   } catch { /* not running — fall through */ }
 
   // 2. In production try to start the registered Windows Service first.
   //    The NSIS installer registers 'XStatHardwareSvc' running as LocalSystem.
-  if (!IS_DEV) {
+  //    Skip when we just replaced a stale service: `sc start` would relaunch the
+  //    OLD registered binary path, so spawn the bundled exe directly instead.
+  if (!IS_DEV && !hadStale) {
     console.log('[XStat] Attempting to start Windows service...')
     await new Promise<void>((resolve) => {
       const sc = spawn('sc.exe', ['start', 'XStatHardwareSvc'], { stdio: 'ignore' })
@@ -76,9 +131,7 @@ async function startService(): Promise<void> {
   }
 
   // 3. Fall back: spawn service exe directly (dev mode or service not installed).
-  const exeName = IS_DEV
-    ? resolve(__dirname, '../../../XStat.Service/bin/Debug/net9.0/XStat.Service.exe')
-    : join(process.resourcesPath, 'service', 'XStat.Service.exe')
+  const exeName = bundledServiceExePath()
 
   console.log('[XStat] Starting hardware service:', exeName)
   serviceProcess = spawn(exeName, [`--urls=http://0.0.0.0:${SERVICE_PORT}`], { detached: false, stdio: 'ignore', windowsHide: true })

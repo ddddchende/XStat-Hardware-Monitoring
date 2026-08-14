@@ -67,11 +67,15 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
   )
   const canvasWrapperRef  = useRef<HTMLDivElement>(null)
   const zoomRef           = useRef(zoom)
+  const panXRef           = useRef(panX)
+  const panYRef           = useRef(panY)
   const panRef            = useRef<{ active: boolean; mx0: number; my0: number; px0: number; py0: number }>(
     { active: false, mx0: 0, my0: 0, px0: 0, py0: 0 }
   )
 
   useEffect(() => { zoomRef.current = zoom }, [zoom])
+  useEffect(() => { panXRef.current = panX }, [panX])
+  useEffect(() => { panYRef.current = panY }, [panY])
 
   // Ctrl+Z undo, Ctrl+Shift+Z / Ctrl+Y redo, Ctrl+S save — bound to the latest
   // fns so the listener is attached once and stays stable.
@@ -151,11 +155,34 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
   }, [panX, panY])
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
-    //e.preventDefault()
-    setZoom(z => {
-      const next = z - e.deltaY * 0.001
-      return Math.round(Math.min(4, Math.max(0.1, next)) * 100) / 100
-    })
+    const wrapper = canvasWrapperRef.current
+    if (!wrapper) return
+    e.preventDefault()
+    // Zoom around the cursor: keep the canvas point under the mouse stationary.
+    // mx = cursor relative to the wrapper's visual origin (includes the current
+    // pan). Content coord under cursor = mx / zoom. After zooming, pan must be
+    // adjusted so that same content coord maps back to the same screen position:
+    //   pan' = mx + pan - zoom' * (mx / zoom)
+    const rect = wrapper.getBoundingClientRect()
+    const mx = e.clientX - rect.left
+    const my = e.clientY - rect.top
+    const oldZoom = zoomRef.current
+    const oldPanX = panXRef.current
+    const oldPanY = panYRef.current
+    let next = oldZoom - e.deltaY * 0.001
+    next = Math.round(Math.min(4, Math.max(0.1, next)) * 100) / 100
+    if (next === oldZoom) return
+    const nx = mx + oldPanX - next * (mx / oldZoom)
+    const ny = my + oldPanY - next * (my / oldZoom)
+    // Apply immediately to the DOM (like pan dragging) so rapid wheel input never
+    // lags behind React renders; the effect below rewrites the same transform.
+    zoomRef.current = next
+    panXRef.current = nx
+    panYRef.current = ny
+    wrapper.style.transform = `translate(${nx}px, ${ny}px) scale(${next})`
+    setZoom(next)
+    setPanX(nx)
+    setPanY(ny)
   }, [])
 
   const selectedWidgets = activePanel.widgets.filter(w => selectedWidgetIds.includes(w.id))
@@ -612,7 +639,7 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
               <Button
                 size="small"
                 startIcon={<ZoomInIcon sx={{ fontSize: 14 }} />}
-                onClick={() => { setZoom(1); setPanX(0); setPanY(0) }}
+                onClick={() => { zoomRef.current = 1; panXRef.current = 0; panYRef.current = 0; setZoom(1); setPanX(0); setPanY(0) }}
                 sx={{
                   fontSize: '0.7rem', py: 0.25, px: 1, minWidth: 0,
                   borderRadius: 1.5,
@@ -641,6 +668,7 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
               history={history}
               isEditMode={isEditMode}
               snapToGrid={snapToGrid}
+              zoom={zoom}
               selectedWidgetIds={selectedWidgetIds}
               onSelect={handleSelect}
               onWidgetGeometries={updateWidgetGeometries}

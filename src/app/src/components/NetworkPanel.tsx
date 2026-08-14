@@ -9,6 +9,7 @@ import BluetoothIcon from '@mui/icons-material/Bluetooth'
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward'
 import ArrowUpwardIcon   from '@mui/icons-material/ArrowUpward'
 import { Sparkline } from '@/components/Primitives'
+import { autoThroughput } from '@/utils/formatThroughput'
 import type { SensorReading } from '@/types/sensors'
 import type { HistoryPoint } from '@/hooks/useSensorHistory'
 
@@ -35,11 +36,10 @@ function NicIcon({ type, color }: { type: 'wifi' | 'bluetooth' | 'ethernet'; col
 }
 
 function fmtSpeed(value: number | null | undefined, unit: string): string {
-  if (value == null || value === 0) return '0 Mbps'
-  if (unit === 'Mbps') {
-    if (value >= 1)        return `${value.toFixed(1)} Mbps`
-    if (value >= 0.001)   return `${(value * 1000).toFixed(1)} Kbps`
-    return `${(value * 1_000_000).toFixed(0)} bps`
+  if (value == null) return '0 MB/s'
+  if (unit.toLowerCase() === 'mbps') {
+    const { value: v, unit: u } = autoThroughput(value)
+    return `${v} ${u}`
   }
   return `${value.toFixed(1)} ${unit}`
 }

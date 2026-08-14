@@ -2,6 +2,7 @@ import React from 'react'
 import { Box, Typography } from '@mui/material'
 import type { PanelWidget } from '@/types/panel'
 import type { HardwareSnapshot } from '@/types/sensors'
+import { autoThroughput, isMbpsUnit } from '@/utils/formatThroughput'
 
 interface Props {
   widget: PanelWidget
@@ -10,8 +11,15 @@ interface Props {
 
 export const SensorValueWidget: React.FC<Props> = ({ widget, snapshot }) => {
   const sensor = snapshot?.sensors.find(s => s.id === widget.sensorId)
-  const displayValue = sensor?.value != null ? sensor.value.toFixed(1) : '—'
-  const displayUnit  = widget.unit  ?? sensor?.unit  ?? ''
+  // Network throughput (Mbps) auto-switches to B/s / KB/s / MB/s / GB/s unless
+  // the user pinned a custom unit on the widget.
+  const useAutoThroughput = isMbpsUnit(sensor?.unit) && !widget.unit
+  const displayValue = sensor?.value != null
+    ? (useAutoThroughput ? autoThroughput(sensor.value).value : sensor.value.toFixed(1))
+    : '—'
+  const displayUnit  = useAutoThroughput
+    ? autoThroughput(sensor.value).unit
+    : (widget.unit ?? sensor?.unit ?? '')
   const displayLabel = widget.label ?? sensor?.name  ?? 'No sensor'
   const color            = widget.color            ?? '#03dac6'
   const fontSize         = widget.fontSize         ?? 32

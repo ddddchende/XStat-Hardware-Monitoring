@@ -87,6 +87,8 @@
   "widgetProperties.accent": "Accent (bar / line / arc)",
   "widgetProperties.colorHex": "Color (hex)",
   "widgetProperties.fontSize": "Font Size (px)",
+  "widgetProperties.copySensorList": "Copy sensor list text",
+  "widgetProperties.sensorListCopied": "Copied",
   "widgetProperties.bold": "Bold",
   "widgetProperties.italic": "Italic",
   "widgetProperties.fontFamily": "Font family",

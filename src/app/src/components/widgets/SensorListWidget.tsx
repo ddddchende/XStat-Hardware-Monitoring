@@ -2,6 +2,7 @@ import React from 'react'
 import { Box, Typography } from '@mui/material'
 import type { PanelWidget } from '@/types/panel'
 import type { HardwareSnapshot, SensorReading } from '@/types/sensors'
+import { autoThroughput, isMbpsUnit } from '@/utils/formatThroughput'
 
 interface Props {
   widget: PanelWidget
@@ -60,20 +61,26 @@ export const SensorListWidget: React.FC<Props> = ({ widget, snapshot }) => {
               <Typography sx={{ color: 'rgba(255,255,255,0.5)', mt: 0.4, lineHeight: 1.4 }}>
                 {hw}
               </Typography>
-              {list.map(s => (
-                <Box
-                  key={s.id}
-                  title={`${s.hardwareName} / ${s.name} / ${s.type}`}
-                  sx={{ display: 'flex', gap: 1, '&:hover': { bgcolor: 'rgba(255,255,255,0.05)' } }}
-                >
-                  <Box sx={nameStyle}>{s.name}</Box>
-                  <Box sx={metaStyle}>{s.type}</Box>
-                  <Box sx={{ flexShrink: 0, color: '#F07505', fontWeight: 700, textAlign: 'right' }}>
-                    {s.value != null ? s.value : '—'}
+              {list.map(s => {
+                // Network throughput (Mbps) shows as auto-unit byte rate (KB/s…).
+                const disp = isMbpsUnit(s.unit)
+                  ? autoThroughput(s.value)
+                  : { value: s.value != null ? s.value.toFixed(1) : '—', unit: s.unit }
+                return (
+                  <Box
+                    key={s.id}
+                    title={`${s.hardwareName} / ${s.name} / ${s.type}`}
+                    sx={{ display: 'flex', gap: 1, '&:hover': { bgcolor: 'rgba(255,255,255,0.05)' } }}
+                  >
+                    <Box sx={nameStyle}>{s.name}</Box>
+                    <Box sx={metaStyle}>{s.type}</Box>
+                    <Box sx={{ flexShrink: 0, color: '#F07505', fontWeight: 700, textAlign: 'right' }}>
+                      {disp.value}
+                    </Box>
+                    <Box sx={metaStyle}>{disp.unit}</Box>
                   </Box>
-                  <Box sx={metaStyle}>{s.unit}</Box>
-                </Box>
-              ))}
+                )
+              })}
             </React.Fragment>
           ))}
         </React.Fragment>
