@@ -254,13 +254,14 @@ function inferSubscription(html: string): SubscribeRule[] {
  *     { key: 'speed',     label: '速度',     type: 'slider',  min: 0, max: 10, step: 0.5, default: 1 }
  *   ];
  *
- * type: color | text | number | boolean | select | slider
+ * type: color | text | number | boolean | select | slider | sensor
  * 可选字段：label / default / min / max / step / options
+ * sensor：值 = 传感器 id，属性面板用传感器选择器；运行时 props[key] 即 id，控件脚本据此在 sensors 里查找（父页面会自动订阅该传感器）。
  */
 export interface CustomPropSchema {
   key: string
   label?: string
-  type: 'color' | 'text' | 'number' | 'boolean' | 'select' | 'slider'
+  type: 'color' | 'text' | 'number' | 'boolean' | 'select' | 'slider' | 'sensor'
   default?: string | number | boolean
   min?: number
   max?: number
@@ -344,10 +345,24 @@ export const CustomWidget: React.FC<Props> = ({ widget, snapshot }) => {
   // 订阅状态变化时通知面板层聚合服务端订阅：
   //  - 显式声明（__xstatSubscribe）→ 以其为准
   //  - 否则用自动推断的规则；推断为空（纯静态控件）→ 不贡献，跟随面板其余控件子集。
+  // 另外总把「传感器绑定」（__xstatConfig 里 type:'sensor' 且已选）的 id 并入订阅，
+  // 确保选中的传感器一定被推送，控件脚本用 props[key] 即可 find 到。
+  const sensorIds = useMemo(() => {
+    if (widget.type !== 'Custom') return []
+    const ids: string[] = []
+    for (const p of extractPropSchema(widget.customHtml ?? '')) {
+      if (p.type !== 'sensor') continue
+      const v = widget.customProps?.[p.key]
+      if (typeof v === 'string' && v.trim()) ids.push(v.trim())
+    }
+    return ids
+  }, [widget.type, widget.customHtml, widget.customProps])
+
   useEffect(() => {
-    const rules = explicit ?? inferred
+    const base = explicit ?? inferred
+    const rules = sensorIds.length ? [...base, ...sensorIds] : base
     registerSubscribe(widget.id, rules.length ? rules : null)
-  }, [explicit, inferred, widget.id, registerSubscribe])
+  }, [explicit, inferred, sensorIds, widget.id, registerSubscribe])
 
   // 监听 iframe 回发的订阅声明 + 绘制自检（sandbox 下父页面读不到 iframe 内部变量，只能靠 postMessage 上行）
   useEffect(() => {

@@ -343,8 +343,9 @@ window.parent.postMessage({ __xstatSubscribe: [] }, '*');
 | `text` | 文本框 | `default` |
 | `number` | 数字输入 | `default` / `min` / `max` / `step` |
 | `boolean` | 开关 | `default` |
-| `select` | 下拉 | `options: [...]` / `default` |
+| `select` | 分段按钮 / 下拉 | `options: [...]` / `default` |
 | `slider` | 滑块 | `default` / `min` / `max` / `step` |
+| `sensor` | 传感器选择器 | `default`（传感器 id） |
 
 通用字段：`key`（必填，唯一标识）、`label`（属性面板显示名，缺省用 key）。
 
@@ -462,3 +463,43 @@ document.getElementById('icon').style.display = props.showIcon === false ? 'none
 - `map` 把配置值映射到类名，可随意命名选项文本，不必与类名一致
 - 未改过时 `props.variant` 不存在，用 `default` 兜底即可
 - 多套样式也可以各自带配色，配合 `themeColor` 之类的 `color` 参数做更细的调节
+
+**⑥ 传感器选择（绑定任意传感器）**
+
+用 `type: 'sensor'` 声明，属性面板会渲染「选择传感器」按钮（打开与内置控件一致的传感器选择器），选中的值就是传感器 `id`，随 `props` 一起注入。XStat 会自动订阅选中的传感器，控件脚本用 `props.xxx` 拿到 id 后从 `sensors` 里查找：
+
+```html
+<script>
+  window.__xstatConfig = [
+    { key: 'sensor', label: '传感器', type: 'sensor' },
+    { key: 'decimals', label: '小数位', type: 'number', default: 1, min: 0, max: 3, step: 1 }
+  ];
+</script>
+<body>
+  <div id="value">--</div>
+  <script>
+    window.addEventListener('message', function (e) {
+      var props = (e.data && e.data.props) || {};
+      var sensors = (e.data && e.data.sensors) || [];
+
+      /* 优先用属性面板绑定的传感器；未绑定时回退到默认查找 */
+      var target = null;
+      if (props.sensor) {
+        target = sensors.find(function (s) { return s.id === props.sensor; });
+      }
+      if (!target) {
+        target = sensors.find(function (s) { return s.category === 'CPU' && s.type === 'Power'; });
+      }
+
+      if (target && target.value != null) {
+        var dec = props.decimals != null ? Number(props.decimals) : 1;
+        document.getElementById('value').textContent = target.value.toFixed(dec);
+      }
+    });
+  </script>
+```
+
+要点：
+- 属性面板选中的值存 `widget.customProps[key]`（即 `props.xxx`），`id` 会随每次推送自动出现在 `sensors` 里（父页面已自动订阅），无需手动订阅
+- `default` 可填一个传感器 id 作为默认绑定；也可不填，脚本里做「未绑定 → 自动查找」的兜底
+- 适合做「同一个模板，绑定不同传感器」的复用控件

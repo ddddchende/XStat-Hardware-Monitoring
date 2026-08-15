@@ -332,6 +332,8 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
   const { t } = useTranslation()
   const sensors = snapshot?.sensors ?? []
   const [sensorDialogOpen, setSensorDialogOpen] = useState(false)
+  // 自定义控件配置里正在编辑的 sensor 参数 key（null = 未打开）
+  const [customSensorProp, setCustomSensorProp] = useState<string | null>(null)
   const [renamingWidget, setRenamingWidget] = useState(false)
   const [renameValue, setRenameValue] = useState('')
   const [sensorListCopied, setSensorListCopied] = useState(false)
@@ -350,10 +352,12 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
   )
 
   /** Render one declared config prop as an editor control; writes back via onUpdate({ customProps }). */
+  const updateCustomProp = (key: string, v: string | number | boolean) =>
+    onUpdate({ customProps: { ...(widget.customProps ?? {}), [key]: v } })
+
   const renderCustomPropField = (p: CustomPropSchema): React.ReactNode => {
     const value = widget.customProps?.[p.key] ?? p.default
-    const update = (v: string | number | boolean) =>
-      onUpdate({ customProps: { ...(widget.customProps ?? {}), [p.key]: v } })
+    const update = (v: string | number | boolean) => updateCustomProp(p.key, v)
     const label = p.label ?? p.key
     switch (p.type) {
       case 'color':
@@ -419,6 +423,27 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
               {opts.map(o => <MenuItem key={o} value={o}>{o}</MenuItem>)}
             </Select>
           </FormControl>
+        )
+      }
+      case 'sensor': {
+        const cur = value == null ? '' : String(value)
+        const sel = sensors.find(s => s.id === cur)
+        return (
+          <Box key={p.key}>
+            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5 }}>{label}</Typography>
+            <Button
+              size="small"
+              variant="outlined"
+              fullWidth
+              startIcon={<SensorsIcon sx={{ fontSize: 16 }} />}
+              onClick={() => setCustomSensorProp(p.key)}
+              sx={{ textTransform: 'none', justifyContent: 'flex-start', fontSize: '0.75rem' }}
+            >
+              {sel
+                ? `${sel.category} · ${sel.name}`
+                : (cur || '选择传感器')}
+            </Button>
+          </Box>
         )
       }
       case 'slider':
@@ -1578,6 +1603,18 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
           </Button>
         </Box>
       )}
+
+      {/* 自定义控件配置里的传感器选择器 —— 放根节点，任何控件类型都渲染 */}
+      <SensorPickerDialog
+        open={customSensorProp !== null}
+        sensors={sortedSensors}
+        selectedId={customSensorProp ? String(widget.customProps?.[customSensorProp] ?? '') : undefined}
+        onSelect={s => {
+          if (customSensorProp) updateCustomProp(customSensorProp, s?.id ?? '')
+          setCustomSensorProp(null)
+        }}
+        onClose={() => setCustomSensorProp(null)}
+      />
     </Box>
   )
 }
