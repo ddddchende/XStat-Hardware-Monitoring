@@ -421,6 +421,21 @@ ipcMain.handle('workspace:readFile', (_event, filePath: string) => {
   }
 })
 
+// The default reference workspace bundled with the app (resources/workspace.xstatpanel).
+// Loaded on first run so new users see an example panel layout.
+ipcMain.handle('workspace:default', () => {
+  try {
+    const p = IS_DEV
+      ? resolve(__dirname, '../../../../workspace.xstatpanel')
+      : join(process.resourcesPath, 'workspace.xstatpanel')
+    const content = readFileSync(p, 'utf8')
+    return { ok: true as const, content }
+  } catch (err) {
+    console.error('[XStat] workspace:default failed:', err)
+    return { ok: false as const }
+  }
+})
+
 // ── Installed fonts (dynamic list for the font pickers) ─────────────────────
 // Enumerates fonts actually installed on the OS via System.Drawing, so the
 // editor's font dropdown shows real choices (incl. Chinese fonts) instead of a

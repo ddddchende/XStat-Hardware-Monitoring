@@ -57,6 +57,9 @@ contextBridge.exposeInMainWorld('xstat', {
     /** Read a known path without a dialog — used to auto-reopen the last workspace on startup. */
     readFile: (filePath: string): Promise<{ ok: boolean; content?: string }> =>
       ipcRenderer.invoke('workspace:readFile', filePath),
+    /** Content of the default reference workspace bundled with the app. */
+    getDefault: (): Promise<{ ok: boolean; content?: string }> =>
+      ipcRenderer.invoke('workspace:default'),
   },
   fonts: {
     /** All font families installed on the OS (localized names, incl. Chinese). */

@@ -20,7 +20,7 @@ import RedoIcon             from '@mui/icons-material/Redo'
 import LockIcon             from '@mui/icons-material/Lock'
 import LockOpenIcon         from '@mui/icons-material/LockOpen'
 
-import { usePanelLayout }    from '@/hooks/usePanelLayout'
+import { usePanelLayout, STORAGE_KEY } from '@/hooks/usePanelLayout'
 import type { PanelsState }  from '@/hooks/usePanelLayout'
 import { useSensorHistory }  from '@/hooks/useSensorHistory'
 import { WidgetPalette }     from '@/components/WidgetPalette'
@@ -330,23 +330,38 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
 
   // On startup, reopen the workspace file that was open when the app closed
   // (path persisted in localStorage). Falls back to the localStorage snapshot
-  // when the file was moved/deleted.
+  // when the file was moved/deleted. With no remembered file and no saved
+  // layout, load the bundled default reference workspace (resources/workspace.xstatpanel)
+  // so new users see an example panel.
   useEffect(() => {
     const savedPath = localStorage.getItem(WORKSPACE_FILE_KEY)
-    if (!savedPath) return
-    window.xstat.workspace.readFile(savedPath).then(res => {
-      if (!res.ok || !res.content) {
-        // File no longer exists — drop the stale association.
-        persistFilePath(null)
-        return
-      }
+    if (savedPath) {
+      window.xstat.workspace.readFile(savedPath).then(res => {
+        if (!res.ok || !res.content) {
+          // File no longer exists — drop the stale association.
+          persistFilePath(null)
+          return
+        }
+        const ws = parseWorkspaceContent(res.content)
+        if (!ws) {
+          persistFilePath(null)
+          return
+        }
+        loadWorkspace(ws)
+        setCurrentFilePath(savedPath)
+      })
+      return
+    }
+    // First run: no remembered workspace and no local layout — show the
+    // bundled reference workspace (not file-associated; user can Save As).
+    if (localStorage.getItem(STORAGE_KEY)) return
+    window.xstat.workspace.getDefault?.().then(res => {
+      if (!res?.ok || !res.content) return
       const ws = parseWorkspaceContent(res.content)
-      if (!ws) {
-        persistFilePath(null)
-        return
-      }
+      if (!ws) return
       loadWorkspace(ws)
-      setCurrentFilePath(savedPath)
+      setSelectedWidgetIds([])
+      setCanvasSelected(false)
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

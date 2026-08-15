@@ -39,6 +39,7 @@ declare global {
         save(filePath: string, content: string): Promise<{ ok: boolean }>
         open(): Promise<{ canceled: boolean; filePath?: string; content?: string }>
         readFile(filePath: string): Promise<{ ok: boolean; content?: string }>
+        getDefault(): Promise<{ ok: boolean; content?: string }>
       }
       fonts: {
         list(): Promise<string[]>
