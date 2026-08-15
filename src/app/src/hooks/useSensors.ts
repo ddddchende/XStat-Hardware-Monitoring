@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import * as signalR from '@microsoft/signalr'
 import type { HardwareSnapshot } from '@/types/sensors'
-
-const SERVICE_URL = 'http://localhost:9421'
+import { getServiceBase } from '@/utils/getServiceBase'
 
 export function useSensors() {
   const [snapshot, setSnapshot] = useState<HardwareSnapshot | null>(null)
@@ -12,16 +11,37 @@ export function useSensors() {
   // Tracks whether the effect cleanup ran — lets us distinguish a
   // StrictMode-caused stop() from a genuine connection failure.
   const cleanedUpRef = useRef(false)
+  // Retry timer for the initial connection — the service can still be
+  // starting up (slow first hardware enumeration) when the renderer first
+  // tries to connect, so keep retrying instead of failing forever.
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const connect = useCallback(async () => {
     if (hubRef.current) return
     cleanedUpRef.current = false
 
-    const hub = new signalR.HubConnectionBuilder()
-      .withUrl(`${SERVICE_URL}/hubs/sensors`)
-      .withAutomaticReconnect([0, 1000, 3000, 5000])
-      .configureLogging(signalR.LogLevel.None)
-      .build()
+    // Schedule another connection attempt shortly — the service can still be
+    // starting up (slow first hardware enumeration) at this point.
+    const scheduleRetry = () => {
+      if (retryTimerRef.current) return
+      retryTimerRef.current = setTimeout(() => {
+        retryTimerRef.current = null
+        connect()
+      }, 3000)
+    }
+
+    let hub: signalR.HubConnection
+    try {
+      hub = new signalR.HubConnectionBuilder()
+        .withUrl(`${await getServiceBase()}/hubs/sensors`)
+        .withAutomaticReconnect([0, 1000, 3000, 5000])
+        .configureLogging(signalR.LogLevel.None)
+        .build()
+    } catch {
+      // getServiceBase() failed — retry shortly (service may not be up yet).
+      if (!cleanedUpRef.current) scheduleRetry()
+      return
+    }
 
     hub.on('SensorSnapshot', (data: HardwareSnapshot) => {
       setSnapshot(data)
@@ -44,13 +64,15 @@ export function useSensors() {
         setConnected(true)
         setError(null)
       }
-    } catch {
+    } catch (err) {
       // If cleanup ran before start() resolved, the stop() call caused this
       // failure — it is not a real error (React StrictMode dev artifact).
       if (hubRef.current === hub) hubRef.current = null
       if (!cleanedUpRef.current) {
         setConnected(false)
         setError('Cannot reach XStat service. Make sure it is running.')
+        console.error('[useSensors] connect failed:', err)
+        scheduleRetry()
       }
     }
   }, [])
@@ -59,6 +81,7 @@ export function useSensors() {
     connect()
     return () => {
       cleanedUpRef.current = true
+      if (retryTimerRef.current) { clearTimeout(retryTimerRef.current); retryTimerRef.current = null }
       const h = hubRef.current
       hubRef.current = null
       h?.stop()

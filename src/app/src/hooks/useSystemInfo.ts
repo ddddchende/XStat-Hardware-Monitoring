@@ -1,16 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { SystemInfo } from '@/types/systemInfo'
-
-// Resolve the API base for the current context:
-//  - Electron editor (file://) → http://localhost:9421
-//  - LAN panel browser (http(s)://host:9421) → same origin
-function resolveApiBase(): string {
-  if (typeof window === 'undefined') return 'http://localhost:9421'
-  const { protocol, hostname, port } = window.location
-  // file:// or no port → fall back to local service
-  if (protocol === 'file:' || !port) return 'http://localhost:9421'
-  return `${protocol}//${hostname}:${port}`
-}
+import { getServiceBase } from '@/utils/getServiceBase'
 
 export interface UseSystemInfoResult {
   info: SystemInfo | null
@@ -42,7 +32,8 @@ export function useSystemInfo(): UseSystemInfoResult {
       try {
         if (!_cache) {
           if (!_fetching) {
-            _fetching = fetch(`${resolveApiBase()}/api/systeminfo`, { cache: 'no-cache' })
+            _fetching = getServiceBase()
+              .then(base => fetch(`${base}/api/systeminfo`, { cache: 'no-cache' }))
               .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() as Promise<SystemInfo> })
               .then(d => { _cache = d; return d })
               .catch(e => { _fetching = null; throw e })

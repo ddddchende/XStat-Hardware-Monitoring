@@ -12,7 +12,7 @@ import { join, resolve } from 'path'
 import { spawn, execFile, ChildProcess } from 'child_process'
 import { promisify } from 'util'
 import { networkInterfaces } from 'os'
-import { readFileSync, writeFileSync } from 'fs'
+import { readFileSync, writeFileSync, createWriteStream } from 'fs'
 
 const execFileAsync = promisify(execFile)
 
@@ -115,7 +115,9 @@ async function startService(): Promise<void> {
   //    The NSIS installer registers 'XStatHardwareSvc' running as LocalSystem.
   //    Skip when we just replaced a stale service: `sc start` would relaunch the
   //    OLD registered binary path, so spawn the bundled exe directly instead.
-  if (!IS_DEV && !hadStale) {
+  //    Also skip when a custom port is configured: the Windows service starts
+  //    without arguments and would always bind the default port (9421).
+  if (!IS_DEV && !hadStale && SERVICE_PORT === 9421) {
     console.log('[XStat] Attempting to start Windows service...')
     await new Promise<void>((resolve) => {
       const sc = spawn('sc.exe', ['start', 'XStatHardwareSvc'], { stdio: 'ignore' })
@@ -131,14 +133,28 @@ async function startService(): Promise<void> {
   }
 
   // 3. Fall back: spawn service exe directly (dev mode or service not installed).
+  //    Pass --ServicePort (not --urls): Program.cs reads the "ServicePort" config
+  //    key and calls UseUrls() with it — UseUrls overrides any --urls argument.
+  //    Service stdout/stderr is captured to a log file so startup failures
+  //    (port in use, missing runtime, crash) are diagnosable.
   const exeName = bundledServiceExePath()
 
   console.log('[XStat] Starting hardware service:', exeName)
-  serviceProcess = spawn(exeName, [`--urls=http://0.0.0.0:${SERVICE_PORT}`], { detached: false, stdio: 'ignore', windowsHide: true })
-  serviceProcess.on('error', (err) => console.error('[XStat] Service error:', err.message))
-  serviceProcess.on('exit',  (code) => { console.log('[XStat] Service exited:', code); serviceProcess = null })
+  const svcLog = createWriteStream(join(app.getPath('userData'), 'service.log'), { flags: 'a' })
+  // stdio must use 'pipe' strings — Electron rejects WriteStream objects in the
+  // stdio array ("The argument 'stdio' is invalid. Received WriteStream").
+  serviceProcess = spawn(exeName, [`--ServicePort=${SERVICE_PORT}`], { detached: false, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true })
+  serviceProcess.stdout?.pipe(svcLog)
+  serviceProcess.stderr?.pipe(svcLog)
+  serviceProcess.on('error', (err) => {
+    console.error('[XStat] Service error:', err.message)
+    svcLog.write(`[spawn error] ${err.message}\n`)
+  })
+  serviceProcess.on('exit',  (code) => { console.log('[XStat] Service exited:', code); svcLog.end(); serviceProcess = null })
 
-  await waitForService(SERVICE_URL + '/health', 15000)
+  // First start does full hardware enumeration (LHM + disk counters + WMI),
+  // which can take well over 15s — give it plenty of time.
+  await waitForService(SERVICE_URL + '/health', 30000)
 }async function waitForService(url: string, timeoutMs: number): Promise<void> {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
@@ -257,7 +273,10 @@ ipcMain.handle('service:setPort',  async (_event, port: number) => {
   writeAppConfig(appConfig)
   SERVICE_PORT = port
   SERVICE_URL  = `http://localhost:${port}`
-  stopService()
+  // Fully stop the old service first (Windows service + leftover processes);
+  // stopService() only kills a direct child process and would leave the old
+  // service holding the previous port.
+  await stopStaleService()
   await startService()
   return port
 })
@@ -436,6 +455,13 @@ ipcMain.handle('fonts:list', async () => {
 })
 
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ App lifecycle Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+
+/**
+ * NOTE: the renderer CSP deliberately has NO default-src / connect-src, so the
+ * page may connect to the service on any localhost port (custom port support).
+ * We must NOT rewrite index.html at load time — Electron 33 verifies asar file
+ * integrity and a modified file makes the page fail to load (chrome-error page).
+ */
 
 app.whenReady().then(async () => {
   if (!IS_DEV) app.setLoginItemSettings({ openAtLogin: appConfig.startWithWindows, name: 'XStat' })

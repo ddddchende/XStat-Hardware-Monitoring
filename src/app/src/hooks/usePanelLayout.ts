@@ -1,9 +1,9 @@
 import { useReducer, useEffect } from 'react'
 import type { PanelLayout, PanelWidget, LayoutItem, WidgetType } from '@/types/panel'
 import { WIDGET_DEFAULTS } from '@/types/panel'
+import { getServiceBase } from '@/utils/getServiceBase'
 
 export const STORAGE_KEY = 'xstat:panels:v4'
-const SERVICE_BASE = 'http://localhost:9421'
 
 export const CUSTOM_DEFAULT_HTML = `<!DOCTYPE html>
 <html><head><meta charset="UTF-8"><style>
@@ -96,9 +96,10 @@ export const CUSTOM_DEFAULT_HTML = `<!DOCTYPE html>
 
 /** Push layout to the service, retrying a few times on failure (handles startup race). */
 export async function pushLayoutToService(layout: PanelLayout, retries = 5): Promise<void> {
+  const base = await getServiceBase()
   for (let i = 0; i < retries; i++) {
     try {
-      const r = await fetch(`${SERVICE_BASE}/api/panel-layout`, {
+      const r = await fetch(`${base}/api/panel-layout`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(layout),

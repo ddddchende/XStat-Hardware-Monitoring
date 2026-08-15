@@ -70,9 +70,29 @@ export const Settings: React.FC = () => {
       setPortSaved(true)
       setTimeout(() => setPortSaved(false), 3000)
       window.xstat?.service?.getPanelUrl?.().then(setPanelUrl)
+      // The service restarts on the new port — reload once it is ready so every
+      // connection (SignalR, panel-layout, fonts, systeminfo) uses the new port.
+      await waitForServiceReady(newPort)
+      window.location.reload()
     } finally {
       setPortSaving(false)
     }
+  }
+
+  /** Poll /health on the new port until the restarted service responds. */
+  const waitForServiceReady = (port: number, timeoutMs = 15000): Promise<void> => {
+    const deadline = Date.now() + timeoutMs
+    return new Promise(resolve => {
+      const check = async () => {
+        try {
+          const res = await fetch(`http://localhost:${port}/health`, { cache: 'no-cache' })
+          if (res.ok) return resolve()
+        } catch { /* not ready yet */ }
+        if (Date.now() > deadline) return resolve()
+        setTimeout(check, 400)
+      }
+      check()
+    })
   }
 
   const copyUrl = () => {

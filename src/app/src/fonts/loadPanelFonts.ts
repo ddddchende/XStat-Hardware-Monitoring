@@ -1,4 +1,5 @@
 import type { PanelWidget } from '@/types/panel'
+import { getServiceBase } from '@/utils/getServiceBase'
 
 // ── Font transfer to remote browsers ──────────────────────────────────────────
 // The desktop editor lets the user pick any font installed on the machine (incl.
@@ -9,12 +10,6 @@ import type { PanelWidget } from '@/types/panel'
 // Fonts already present in the browser (document.fonts.check) are skipped.
 
 // Same API-base resolution as useSystemInfo.
-function resolveApiBase(): string {
-  if (typeof window === 'undefined') return 'http://localhost:9421'
-  const { protocol, hostname, port } = window.location
-  if (protocol === 'file:' || !port) return 'http://localhost:9421'
-  return `${protocol}//${hostname}:${port}`
-}
 
 // Dedupe font families referenced across all widget style fields.
 export function collectPanelFonts(widgets: PanelWidget[]): string[] {
@@ -54,9 +49,9 @@ function loadFontFace(family: string): Promise<void> {
     return done
   }
 
-  const url = `${resolveApiBase()}/api/fonts/face?name=${encodeURIComponent(family)}`
-  const p = new FontFace(family, `url(${url})`)
-    .load()
+  const p = getServiceBase()
+    .then(base => `${base}/api/fonts/face?name=${encodeURIComponent(family)}`)
+    .then(url => new FontFace(family, `url(${url})`).load())
     .then(face => { document.fonts.add(face) })
     .catch(err => {
       console.warn(`[XStat] Could not load font '${family}' from service:`, err)

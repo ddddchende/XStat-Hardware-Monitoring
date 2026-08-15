@@ -15,7 +15,9 @@
   - Node.js 20+
 #>
 
-Set-StrictMode -Version Latest
+# NOTE: no Set-StrictMode here — Node's npm.ps1 wrapper reads
+# $MyInvocation.Statement, which doesn't exist under StrictMode-Latest and
+# aborts every npm call ("PropertyNotFoundStrict").
 $ErrorActionPreference = 'Stop'
 
 $root       = $PSScriptRoot
@@ -38,7 +40,17 @@ if (Test-Path $distDir) {
 # Give OS / AV time to release any residual handles before we write new files.
 Start-Sleep -Seconds 2
 
-Write-Host "`n=== 1/3  Publishing XStat.Service ===" -ForegroundColor Cyan
+Write-Host "`n=== 1/3  Building web panel ===" -ForegroundColor Cyan
+# Must run BEFORE dotnet publish: publish copies wwwroot into dist-service,
+# so building the panel afterwards would leave the packaged service serving
+# the previous build's panel bundle.
+Push-Location $appDir
+try {
+    npm run build:panel
+    if ($LASTEXITCODE -ne 0) { throw "build:panel failed" }
+} finally { Pop-Location }
+
+Write-Host "`n=== 2/3  Publishing XStat.Service ===" -ForegroundColor Cyan
 dotnet publish "$serviceDir" `
     --configuration Release `
     --runtime win-x64 `
@@ -47,13 +59,6 @@ dotnet publish "$serviceDir" `
     -p:DebugType=none `
     -p:DebugSymbols=false
 if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed" }
-
-Write-Host "`n=== 2/3  Building web panel ===" -ForegroundColor Cyan
-Push-Location $appDir
-try {
-    npm run build:panel
-    if ($LASTEXITCODE -ne 0) { throw "build:panel failed" }
-} finally { Pop-Location }
 
 Write-Host "`n=== 3/3  Packaging Electron app ===" -ForegroundColor Cyan
 Push-Location $appDir

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
+import { getServiceBase } from '@/utils/getServiceBase'
 
 const SETTINGS_KEY = 'xstat:settings:v1'
-const SERVICE_BASE = 'http://localhost:9421'
 
 export interface AppSettings {
   pollIntervalMs: number
@@ -23,11 +23,13 @@ export function useAppSettings() {
   // Persist and push to service on every change.
   useEffect(() => {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings))
-    fetch(`${SERVICE_BASE}/api/config`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pollIntervalMs: settings.pollIntervalMs }),
-    }).catch(() => { /* service may not be running yet */ })
+    getServiceBase()
+      .then(base => fetch(`${base}/api/config`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pollIntervalMs: settings.pollIntervalMs }),
+      }))
+      .catch(() => { /* service may not be running yet */ })
   }, [settings])
 
   function setPollIntervalMs(ms: number) {
