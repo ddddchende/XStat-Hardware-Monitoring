@@ -29,6 +29,20 @@ public sealed class FontsController : ControllerBase
     [HttpHead("face")]
     public IActionResult Face([FromQuery] string name)
     {
+        // Fonts are public files with no credentials, so allow ANY origin. The
+        // global CORS policy only whitelists null/localhost/private IPs, which
+        // breaks @font-face in custom widgets when the panel is exposed through
+        // a reverse proxy (the browser sends the proxy domain as Origin, which
+        // is rejected → font silently falls back to the system font). Setting
+        // "*" here overrides the CORS middleware's header for this endpoint —
+        // the middleware's Allow-Credentials:true must also be removed, since
+        // browsers forbid combining it with a wildcard origin.
+        Response.Headers.AccessControlAllowOrigin = "*";
+        Response.Headers.Remove("Access-Control-Allow-Credentials");
+        // CORS responses must vary on Origin, otherwise caches (browser or
+        // reverse proxy) may serve a pre-CORS response to a different origin.
+        Response.Headers.Vary = "Origin";
+
         if (string.IsNullOrWhiteSpace(name)) return BadRequest(new { error = "name is required." });
 
         var family = name.Trim();

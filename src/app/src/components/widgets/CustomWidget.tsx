@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useState, useContext, useMemo } from 'react'
 import type { PanelWidget } from '@/types/panel'
 import type { HardwareSnapshot, SensorReading } from '@/types/sensors'
 import { PanelSubscriptionContext } from '@/panel/PanelSubscriptionContext'
+import { getServiceBase } from '@/utils/getServiceBase'
 
 interface Props {
   widget: PanelWidget
@@ -67,6 +68,62 @@ function applyFiles(html: string, files?: Record<string, string>): string {
     result = bootstrap + result
   }
   return result
+}
+
+/**
+ * 注入"字体桥"脚本：父页面把字体预加载成 data URL 后经 postMessage 传入，
+ * 本脚本把控件文档里所有同名 @font-face 的 src 替换为 data URL，并直接注册
+ * FontFace。字体从此不发起任何网络请求 —— 彻底绕过跨源 CORS / 反代缓存 /
+ * 证书 / 移动端 WebView 对异步跨源字体的应用缺陷，任何环境都能显示。
+ */
+function injectFontBridge(html: string): string {
+  const bridge = '<script>(function(){'
+    + 'var fontMap={},patched={},registered={};'
+    + 'window.addEventListener("message",function(e){'
+    +   'if(e.data&&e.data.__xstatFonts){'
+    +     'var m=e.data.__xstatFonts;'
+    +     'for(var k in m){if(m.hasOwnProperty(k))fontMap[k]=m[k];}'
+    +     'patch();registerFaces();'
+    +     // Font bridge must not keep polling forever (mobile frame-rate cost).
+    // A few short follow-ups cover @font-face rules the widget injects after
+    // its own script runs, then it stops.
+    +     'var n=0;var t=setInterval(function(){patch();registerFaces();if(++n>=8)clearInterval(t);},120);'
+    +   '}'
+    + '},false);'
+    + 'function patch(){'
+    +   'try{'
+    +     'for(var i=0;i<document.styleSheets.length;i++){'
+    +       'var rules=document.styleSheets[i].cssRules;'
+    +       'if(!rules)continue;'
+    +       'for(var j=0;j<rules.length;j++){'
+    +         'var r=rules[j];'
+    +         'if(r.type===CSSRule.FONT_FACE_RULE&&r.style&&fontMap[r.style.fontFamily]&&!patched[r.style.fontFamily]){'
+    +           'patched[r.style.fontFamily]=1;'
+    +           'r.style.setProperty("src","url(\'"+fontMap[r.style.fontFamily]+"\')","important");'
+    +         '}'
+    +       '}'
+    +     '}'
+    +   '}catch(e){}'
+    + '}'
+    + 'function registerFaces(){'
+    +   'setTimeout(function(){'
+    +     'try{'
+    +       'for(var k in fontMap){'
+    +         'if(fontMap.hasOwnProperty(k)&&!registered[k]){'
+    +           'registered[k]=1;'
+    +           '(function(fam,u){'
+    +             'var ff=new FontFace(fam,"url("+u+")");'
+    +             'ff.load().then(function(f){try{document.fonts.add(f);}catch(e){}}).catch(function(){});'
+    +           '})(k,fontMap[k]);'
+    +         '}'
+    +       '}'
+    +     '}catch(e){}'
+    +   '},200);'
+    + '}'
+    + '})();<\/script>'
+  if (html.includes('</head>')) return html.replace('</head>', bridge + '</head>')
+  if (html.includes('<body')) return html.replace(/<body[^>]*>/, m => m + bridge)
+  return bridge + html
 }
 
 /**
@@ -261,8 +318,30 @@ export const CustomWidget: React.FC<Props> = ({ widget, snapshot }) => {
 
   const widgetDoc = useMemo(() => {
     if (isWeb) return undefined
-    return injectPaintCheck(applyFiles(widget.customHtml ?? '', widget.customFiles))
+    return injectPaintCheck(applyFiles(injectFontBridge(widget.customHtml ?? ''), widget.customFiles))
   }, [isWeb, widget.customHtml, widget.customFiles])
+
+  // Preload fonts referenced by the widget as data URLs (same-origin fetch, no
+  // CORS) and ship them into the iframe; the font bridge rewrites @font-face
+  // src so the iframe never needs a cross-origin font request.
+  const [fontDataUrls, setFontDataUrls] = useState<Record<string, string> | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    const names = extractFontNames(widget.customHtml ?? '')
+    if (names.length === 0) { setFontDataUrls({}); return }
+    const result: Record<string, string> = {}
+    Promise.all(names.map(async (n) => {
+      const d = await fetchFontDataUrl(n)
+      if (d && !cancelled) result[n] = d
+    })).then(() => { if (!cancelled) setFontDataUrls(result) })
+    return () => { cancelled = true }
+  }, [widget.customHtml])
+
+  // Deliver fonts to the iframe after it loads (and again on rebuild / when data arrives).
+  useEffect(() => {
+    const win = iframeRef.current?.contentWindow
+    if (win && fontDataUrls) win.postMessage({ __xstatFonts: fontDataUrls }, '*')
+  }, [fontDataUrls, renderToken, isWeb])
 
   // iframe 重建（绘制自检重试）后重新等待订阅声明
   useEffect(() => {
@@ -291,6 +370,8 @@ export const CustomWidget: React.FC<Props> = ({ widget, snapshot }) => {
         // Send files ONCE on load so window.__xstatFiles is populated;
         // sensor data flows via the subscription effect above (never files again).
         win.postMessage({ sensors: [], files: widget.customFiles ?? {} }, '*')
+        // Fonts (data URLs) if already resolved — otherwise the font effect delivers them.
+        if (fontDataUrls) win.postMessage({ __xstatFonts: fontDataUrls }, '*')
         // 轻量重绘兜底：微调 opacity 使 iframe 生成新合成层
         const el = iframeRef.current
         if (el) {
@@ -317,4 +398,68 @@ function hashString(s: string): number {
   let h = 5381
   for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0
   return h >>> 0
+}
+
+// ── Font bridging (data-URL fonts for the sandboxed iframe) ──────────────────
+// Custom widgets reference fonts like /api/fonts/face?name=X (often built at
+// runtime via document.baseURI). The sandbox iframe then loads the font as a
+// cross-origin resource, which some mobile WebViews fail to apply over HTTPS
+// even with correct CORS headers. To make fonts work everywhere, the parent
+// page fetches them same-origin (no CORS), converts to data URLs and ships them
+// into the iframe via postMessage; the injected font bridge rewrites @font-face
+// src to the data URL, so no network request happens inside the iframe at all.
+
+/** Extract font family names referenced in a widget's HTML (api/fonts or encodeURIComponent patterns). */
+function extractFontNames(html: string): string[] {
+  const names = new Set<string>()
+  const decode = (s: string) => {
+    if (!s.includes('%')) return s
+    try { return decodeURIComponent(s) } catch { return s }
+  }
+  const re1 = /encodeURIComponent\s*\(\s*['"]([^'"]+)['"]\s*\)/g
+  for (const m of html.matchAll(re1) ?? []) names.add(decode(m[1]))
+  const re2 = /\/api\/fonts\/face\?name=([^&'")\s]+)/g
+  for (const m of html.matchAll(re2) ?? []) names.add(decode(m[1]))
+  const re3 = /name\s*=\s*['"]([^'"]+)['"]\s*format\(/g
+  for (const m of html.matchAll(re3) ?? []) names.add(decode(m[1]))
+  // CSS 声明：font-family: 'X' / font-family: X —— 取第一个字体（逗号前），
+  // 用户只需在样式里引用字体名，不再需要手动注入远程 @font-face 脚本。
+  // 系统字体（Inter/Courier New…）若服务端没有会快速 404 → null，无害。
+  const re4 = /font-family\s*:\s*['"]?([^'";,{}]+)['"]?/gi
+  for (const m of html.matchAll(re4) ?? []) {
+    const v = m[1].trim()
+    if (v) names.add(v)
+  }
+  return [...names]
+}
+
+/**
+ * Fetch a font same-origin (no CORS needed) and convert it to a data URL.
+ * Cached per family across the whole panel, so multiple widgets referencing the
+ * same font only fetch/encode it once (huge win on mobile where each widget
+ * iframe would otherwise re-download and re-encode the font file).
+ */
+const fontDataUrlCache = new Map<string, Promise<string | null>>()
+function fetchFontDataUrl(family: string): Promise<string | null> {
+  let p = fontDataUrlCache.get(family)
+  if (!p) {
+    p = (async () => {
+      try {
+        const base = await getServiceBase()
+        const res = await fetch(`${base}/api/fonts/face?name=${encodeURIComponent(family)}`)
+        if (!res.ok) return null
+        const blob = await res.blob()
+        return await new Promise<string | null>((resolve) => {
+          const fr = new FileReader()
+          fr.onload = () => resolve(fr.result as string)
+          fr.onerror = () => resolve(null)
+          fr.readAsDataURL(blob)
+        })
+      } catch {
+        return null
+      }
+    })()
+    fontDataUrlCache.set(family, p)
+  }
+  return p
 }

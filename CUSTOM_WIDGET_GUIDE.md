@@ -28,6 +28,30 @@ XStat 的「自定义」组件把用户编写的完整 HTML 文档放进沙箱 i
 4. **传感器结构**：`{ id, name, category, type, value, unit, hardwareName }`；按 `name` 查找，重名时用 `id`；`value` 可能为 null 必须判空
 5. **附加文件**：用 `./data/文件名` 引用（`<img src>` / CSS `background-image` 均可），运行时自动替换为 data URL
 6. **不要用 ES module**（`import/export`），用普通 `<script>`
+7. **字体：直接用 `font-family` 引用，不要手动注入远程 `@font-face`**：
+
+   ```css
+   /* ✅ 正确：直接写字体名，XStat 自动处理 */
+   .value { font-family: '方正粗雅宋长简体'; }
+   ```
+
+   ```html
+   <!-- ❌ 错误（旧方案，已废弃）：手动注入远程字体脚本。
+        会在手机上多发起一次字体网络请求，导致加载卡顿；
+        且 WebView 反代域名下跨源字体可能不应用 -->
+   <script>
+     (function () {
+       var m = document.baseURI.match(/^https?:\/\/[^/]+/);
+       var base = m ? m[0] : 'http://localhost:9421';
+       var url = base + '/api/fonts/face?name=' + encodeURIComponent('方正粗雅宋长简体');
+       var s = document.createElement('style');
+       s.textContent = "@font-face{font-family:'方正粗雅宋长简体';src:url('" + url + "') format('truetype');}";
+       document.head.appendChild(s);
+     })();
+   </script>
+   ```
+
+   控件里只需写 `font-family: '字体名'`，XStat 会自动：扫描 HTML 提取字体名 → 同源获取字体文件转 data URL → 注入控件文档（fontBridge）→ 在任何环境（桌面 / 局域网 APK / 反代域名手机浏览器）都能显示。字体来自 XStat 服务所在电脑上安装的字体；电脑上没有的字体名会自动回退到系统字体。
 
 ## 3. 自适应与缩放（核心，最易踩坑）
 
@@ -140,6 +164,7 @@ layout();
 | `import` 报错 | 用了 ES module | 改普通 `<script>` |
 | 文件不显示 | 路径非 `./data/文件名` | 用 `./data/` 前缀 |
 | 控件白屏 | body 不透明 / height 非 100vh | `background:transparent; height:100vh;` |
+| 字体没生效（回退系统字体） | ① 手动注入了远程 `@font-face` 脚本（旧方案，移动端会卡）② 字体名拼写与电脑上安装的不一致 | ① 删掉注入段，只用 `font-family` ② 核对字体名（可在属性面板的字体选择器里复制准确名称） |
 | 拖动卡顿 | 脚本重计算 | 250ms 触发，避免重活 |
 
 ## 7. 调试
