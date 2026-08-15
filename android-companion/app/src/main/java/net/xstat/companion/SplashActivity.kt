@@ -35,7 +35,24 @@ class SplashActivity : AppCompatActivity() {
             animators += anim
         }
 
-        // Start discovery immediately; pass result to MainActivity via intent.
+        when (Prefs.mode(this)) {
+            // Manual URL saved → connect directly, skip discovery
+            "manual" -> {
+                val url = Prefs.manualUrl(this)
+                if (!url.isNullOrEmpty()) {
+                    launchMain(url)
+                } else {
+                    launchChooser()
+                }
+            }
+            // LAN chosen before → run discovery
+            "lan" -> startDiscovery()
+            // Never chosen → ask the user first
+            else -> launchChooser()
+        }
+    }
+
+    private fun startDiscovery() {
         DiscoveryManager.findXStat(
             timeoutMs = 15_000L,
             onFound = { url ->
@@ -49,6 +66,13 @@ class SplashActivity : AppCompatActivity() {
                 }
             }
         )
+    }
+
+    private fun launchChooser() {
+        val intent = Intent(this, ChooserActivity::class.java)
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+        startActivity(intent)
+        finish()
     }
 
     private fun launchMain(url: String?) {

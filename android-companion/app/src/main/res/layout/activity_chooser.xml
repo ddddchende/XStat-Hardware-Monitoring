@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- First-launch chooser: LAN discovery or manual address entry -->
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:background="@color/bg"
+    android:padding="32dp">
+
+    <ImageView
+        android:layout_width="96dp"
+        android:layout_height="96dp"
+        android:src="@mipmap/ic_launcher"
+        android:contentDescription="@string/app_name"
+        android:layout_gravity="center_horizontal" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/chooser_title"
+        android:textColor="@color/text"
+        android:textSize="22sp"
+        android:textStyle="bold"
+        android:letterSpacing="0.03"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="24dp"
+        android:layout_marginBottom="40dp" />
+
+    <Button
+        android:id="@+id/btnLan"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/chooser_lan"
+        android:backgroundTint="@color/purple"
+        android:textColor="@color/text"
+        android:padding="12dp" />
+
+    <Button
+        android:id="@+id/btnManual"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/chooser_manual"
+        android:backgroundTint="@color/bg_surface"
+        android:textColor="@color/text"
+        android:layout_marginTop="16dp"
+        android:padding="12dp" />
+
+</LinearLayout>

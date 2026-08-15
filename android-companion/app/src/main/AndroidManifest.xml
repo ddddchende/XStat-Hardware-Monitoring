@@ -41,6 +41,20 @@
             </intent-filter>
         </activity>
 
+        <!-- First-launch connection chooser -->
+        <activity
+            android:name=".ChooserActivity"
+            android:exported="false"
+            android:screenOrientation="sensor"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize" />
+
+        <!-- Settings -->
+        <activity
+            android:name=".SettingsActivity"
+            android:exported="false"
+            android:screenOrientation="sensor"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize" />
+
         <!-- Main WebView activity -->
         <activity
             android:name=".MainActivity"

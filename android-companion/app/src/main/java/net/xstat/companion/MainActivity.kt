@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.view.KeyEvent
 import android.view.View
 import android.view.WindowManager
 import android.webkit.WebResourceRequest
@@ -37,6 +38,12 @@ class MainActivity : AppCompatActivity() {
         const val EXTRA_URL = "net.xstat.companion.EXTRA_URL"
         private const val HEALTH_INTERVAL_MS = 1_000L
         private const val MAX_FAILURES = 3
+        private const val HINT_DURATION_MS = 5_000L
+        private const val MAX_HINT_SHOWS = 3
+        private const val HINT_FADE_IN_MS = 250L
+        private const val HINT_FADE_OUT_MS = 400L
+        private const val HINT_HOLD_MS =
+            HINT_DURATION_MS - HINT_FADE_IN_MS - HINT_FADE_OUT_MS
     }
 
     private lateinit var webView: WebView
@@ -45,8 +52,15 @@ class MainActivity : AppCompatActivity() {
     private lateinit var retryButton: Button
 
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val hintHandler = Handler(Looper.getMainLooper())
     private val monitorRunning = AtomicBoolean(false)
     private var consecutiveFailures = 0
+    private var currentBaseUrl: String? = null
+
+    // Volume + / Volume − pressed together opens Settings (no on-screen button)
+    private var volumeUpPressed = false
+    private var volumeDownPressed = false
+    private var volumeComboFired = false
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -70,13 +84,85 @@ class MainActivity : AppCompatActivity() {
 
         val url = intent.getStringExtra(EXTRA_URL)
         if (url != null) {
+            currentBaseUrl = url
             loadUrl(url)
             startConnectionMonitor(url)
+            showSettingsHint()
         } else {
             showError(getString(R.string.error_no_host))
         }
 
         retryButton.setOnClickListener { restartApp() }
+    }
+
+    // ── Settings access (no on-screen button) ───────────────────────────────
+
+    /**
+     * Volume + and Volume − pressed together opens Settings.
+     * Single volume presses still adjust system volume (super is called).
+     */
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        when (keyCode) {
+            KeyEvent.KEYCODE_VOLUME_UP -> volumeUpPressed = true
+            KeyEvent.KEYCODE_VOLUME_DOWN -> volumeDownPressed = true
+        }
+        if (volumeUpPressed && volumeDownPressed && !volumeComboFired) {
+            volumeComboFired = true
+            openSettings()
+            return true
+        }
+        return super.onKeyDown(keyCode, event)
+    }
+
+    override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
+        when (keyCode) {
+            KeyEvent.KEYCODE_VOLUME_UP -> volumeUpPressed = false
+            KeyEvent.KEYCODE_VOLUME_DOWN -> volumeDownPressed = false
+        }
+        if (!volumeUpPressed && !volumeDownPressed) volumeComboFired = false
+        return super.onKeyUp(keyCode, event)
+    }
+
+    private fun openSettings() {
+        // Pause the health monitor while Settings is on top; it restarts onResume
+        stopConnectionMonitor()
+        startActivity(Intent(this, SettingsActivity::class.java))
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Re-arm the monitor after returning from Settings
+        val url = currentBaseUrl
+        if (url != null && !monitorRunning.get()) {
+            startConnectionMonitor(url)
+        }
+    }
+
+    /** Transient hint explaining how to reach Settings — at most [MAX_HINT_SHOWS] times ever. */
+    private fun showSettingsHint() {
+        if (Prefs.hintShownCount(this) >= MAX_HINT_SHOWS) return
+        Prefs.incrementHintShown(this)
+        hintHandler.removeCallbacksAndMessages(null)
+        findViewById<TextView>(R.id.hintView).apply {
+            // Pop-in (fade + scale up), hold, then fade out
+            visibility = View.VISIBLE
+            alpha = 0f
+            scaleX = 0.85f
+            scaleY = 0.85f
+            animate()
+                .alpha(1f).scaleX(1f).scaleY(1f)
+                .setDuration(HINT_FADE_IN_MS)
+                .start()
+            hintHandler.postDelayed({
+                if (isAttachedToWindow) {
+                    animate()
+                        .alpha(0f)
+                        .setDuration(HINT_FADE_OUT_MS)
+                        .withEndAction { visibility = View.GONE }
+                        .start()
+                }
+            }, HINT_HOLD_MS)
+        }
     }
 
     // ── Connection monitor ──────────────────────────────────────────────────

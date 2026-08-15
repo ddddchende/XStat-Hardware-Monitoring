@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">XStat</string>
+    <string name="searching">正在网络中搜索 XStat…</string>
+    <string name="error_no_host">在本地网络中没有找到 XStat 实例。\n\n请确认 XStat 正在与手机处于同一 Wi-Fi 网络的电脑上运行。</string>
+    <string name="error_load_failed">XStat 面板加载失败。\n\n错误：%1$s</string>
+    <string name="retry">重试</string>
+
+    <!-- 连接方式选择 -->
+    <string name="chooser_title">连接到 XStat</string>
+    <string name="chooser_lan">搜索局域网</string>
+    <string name="chooser_manual">手动输入地址</string>
+    <string name="manual_url_title">XStat 地址</string>
+    <string name="manual_url_hint">例如 http://192.168.1.100:9421</string>
+    <string name="connect">连接</string>
+    <string name="cancel">取消</string>
+
+    <!-- 设置 -->
+    <string name="settings_title">设置</string>
+    <string name="settings_config_label">当前配置</string>
+    <string name="settings_mode_lan">自动 — 搜索局域网</string>
+    <string name="settings_mode_manual">手动 — %1$s</string>
+    <string name="settings_mode_none">尚未配置</string>
+    <string name="settings_clear">清除配置</string>
+    <string name="settings_clear_title">清除配置</string>
+    <string name="settings_clear_message">删除已保存的连接设置，下次启动时重新选择？</string>
+    <string name="settings_back">返回</string>
+
+    <!-- 启动后的设置入口提示 -->
+    <string name="hint_open_settings">同时按住 音量+ 和 音量- 打开设置</string>
+</resources>
