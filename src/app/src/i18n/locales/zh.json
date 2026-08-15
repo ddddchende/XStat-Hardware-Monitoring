@@ -159,6 +159,8 @@
   "widgetProperties.customHtmlWidget": "自定义 HTML 组件",
   "widgetProperties.customDesc": "编写任意 HTML / CSS / JS。XStat 通过",
   "widgetProperties.customDescSuffix": "在每次轮询时注入实时传感器数据。",
+  "widgetProperties.customProps": "可配置属性",
+  "widgetProperties.customPropsHint": "由控件 HTML 中的 __xstatConfig 声明。脚本中通过 e.data.props 读取。",
   "widgetProperties.openCodeEditor": "打开代码编辑器",
   "widgetProperties.image": "图片",
   "widgetProperties.svgIcon": "SVG 图标",

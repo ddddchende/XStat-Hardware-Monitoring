@@ -241,6 +241,76 @@ function inferSubscription(html: string): SubscribeRule[] {
 }
 
 /**
+ * 控件声明的可配置属性（约定式 schema）。
+ * 控件 HTML 里写 `window.__xstatConfig = [ ... ]` 数组字面量，属性面板据此
+ * 生成表单，值存 widget.customProps 并随 sensors 一起 postMessage 注入：
+ *
+ *   window.__xstatConfig = [
+ *     { key: 'ringColor', label: '圆环颜色', type: 'color',   default: '#03dac6' },
+ *     { key: 'unit',      label: '单位',     type: 'text',    default: '°C' },
+ *     { key: 'decimals',  label: '小数位',   type: 'number',  default: 1, min: 0, max: 3 },
+ *     { key: 'showBg',    label: '显示背景', type: 'boolean', default: true },
+ *     { key: 'variant',   label: '样式',     type: 'select',  options: ['a','b'], default: 'a' },
+ *     { key: 'speed',     label: '速度',     type: 'slider',  min: 0, max: 10, step: 0.5, default: 1 }
+ *   ];
+ *
+ * type: color | text | number | boolean | select | slider
+ * 可选字段：label / default / min / max / step / options
+ */
+export interface CustomPropSchema {
+  key: string
+  label?: string
+  type: 'color' | 'text' | 'number' | 'boolean' | 'select' | 'slider'
+  default?: string | number | boolean
+  min?: number
+  max?: number
+  step?: number
+  options?: string[]
+}
+
+/** 提取 __xstatConfig 数组字面量 → schema。失败（非字面量/语法错误）返回 []，绝不执行控件代码。 */
+export function extractPropSchema(html: string): CustomPropSchema[] {
+  const marker = '__xstatConfig'
+  const idx = html.indexOf(marker)
+  if (idx === -1) return []
+  const eq = html.indexOf('=', idx + marker.length)
+  if (eq === -1) return []
+  const start = html.indexOf('[', eq)
+  if (start === -1) return []
+  // 平衡括号扫描（跳过字符串/转义），拿到完整数组字面量 —— 避免非贪婪正则
+  // 在嵌套 options:[...] 处提前截断。
+  let depth = 0
+  let inStr: string | null = null
+  let end = -1
+  for (let i = start; i < html.length; i++) {
+    const ch = html[i]
+    if (inStr) {
+      if (ch === '\\') i++
+      else if (ch === inStr) inStr = null
+      continue
+    }
+    if (ch === '"' || ch === "'") inStr = ch
+    else if (ch === '[') depth++
+    else if (ch === ']') { depth--; if (depth === 0) { end = i; break } }
+  }
+  if (end === -1) return []
+  try {
+    // 宽松转 JSON：所有单引号字符串 → 双引号（覆盖 default:'x' 与数组元素 'a','b'）；
+    // 无引号键名 → 加双引号。
+    const json = html
+      .slice(start, end + 1)
+      .replace(/'((?:[^'\\]|\\.)*)'/g, '"$1"')
+      .replace(/([{,]\s*)([A-Za-z_$][\w$]*)\s*:/g, '$1"$2":')
+    const arr = JSON.parse(json)
+    if (!Array.isArray(arr)) return []
+    return arr.filter((x: unknown): x is CustomPropSchema =>
+      !!x && typeof x === 'object' && typeof (x as Record<string, unknown>).key === 'string')
+  } catch {
+    return []
+  }
+}
+
+/**
  * Renders user-authored HTML/CSS/JS inside a sandboxed iframe.
  * XStat posts the current sensor snapshot to the iframe via window.postMessage
  * on every poll tick so the user's script can reactively update the UI.
@@ -355,8 +425,9 @@ export const CustomWidget: React.FC<Props> = ({ widget, snapshot }) => {
     const win = iframeRef.current?.contentWindow
     if (!win || !snapshot || subscribe === null) return
     const sensors = subscribe === 'all' ? snapshot.sensors : filterSensors(snapshot.sensors, subscribe)
-    win.postMessage({ sensors }, '*')
-  }, [snapshot, subscribe])
+    // props：属性面板改的可配置属性（__xstatConfig 声明），控件脚本用 e.data.props.xxx 读取
+    win.postMessage({ sensors, props: widget.customProps ?? {} }, '*')
+  }, [snapshot, subscribe, widget.customProps])
 
   return (
     <iframe
@@ -369,7 +440,7 @@ export const CustomWidget: React.FC<Props> = ({ widget, snapshot }) => {
         if (!win) return
         // Send files ONCE on load so window.__xstatFiles is populated;
         // sensor data flows via the subscription effect above (never files again).
-        win.postMessage({ sensors: [], files: widget.customFiles ?? {} }, '*')
+        win.postMessage({ sensors: [], files: widget.customFiles ?? {}, props: widget.customProps ?? {} }, '*')
         // Fonts (data URLs) if already resolved — otherwise the font effect delivers them.
         if (fontDataUrls) win.postMessage({ __xstatFonts: fontDataUrls }, '*')
         // 轻量重绘兜底：微调 opacity 使 iframe 生成新合成层

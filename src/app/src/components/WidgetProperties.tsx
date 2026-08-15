@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, useMemo } from 'react'
 import {
   Box, Typography, TextField, Switch, FormControlLabel,
   ToggleButton, ToggleButtonGroup, Divider, Button, Autocomplete,
@@ -27,6 +27,7 @@ import { SensorPickerDialog }   from '@/components/SensorPickerDialog'
 import { boxEffectSupportsRandom } from '@/components/widgets/boxEffects'
 import { useSystemInfo } from '@/hooks/useSystemInfo'
 import { useFonts } from '@/hooks/useFonts'
+import { extractPropSchema, type CustomPropSchema } from '@/components/widgets/CustomWidget'
 
 const PRESET_COLORS = [
   '#03dac6', '#7c6ef5', '#4caf50', '#ff9800',
@@ -341,6 +342,103 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
   // or when running outside Electron).
   const installedFonts = useFonts()
   const fontOptions = installedFonts.length > 0 ? installedFonts : COMMON_FONTS
+
+  // Custom widget — configurable props declared via __xstatConfig in the HTML.
+  const customSchema = useMemo<CustomPropSchema[]>(
+    () => (widget.type === 'Custom' ? extractPropSchema(widget.customHtml ?? '') : []),
+    [widget.type, widget.customHtml],
+  )
+
+  /** Render one declared config prop as an editor control; writes back via onUpdate({ customProps }). */
+  const renderCustomPropField = (p: CustomPropSchema): React.ReactNode => {
+    const value = widget.customProps?.[p.key] ?? p.default
+    const update = (v: string | number | boolean) =>
+      onUpdate({ customProps: { ...(widget.customProps ?? {}), [p.key]: v } })
+    const label = p.label ?? p.key
+    switch (p.type) {
+      case 'color':
+        return (
+          <Box key={p.key}>
+            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5 }}>{label}</Typography>
+            <ColorSwatchesPicker value={String(value ?? '')} onChange={update} />
+          </Box>
+        )
+      case 'text':
+        return (
+          <TextField
+            key={p.key} size="small" label={label}
+            value={value == null ? '' : String(value)}
+            onChange={e => update(e.target.value)}
+          />
+        )
+      case 'number':
+        return (
+          <TextField
+            key={p.key} size="small" type="number" label={label}
+            value={value == null ? '' : String(value)}
+            inputProps={{ min: p.min, max: p.max, step: p.step ?? 1 }}
+            onChange={e => update(e.target.value === '' ? '' : Number(e.target.value))}
+          />
+        )
+      case 'boolean':
+        return (
+          <FormControlLabel
+            key={p.key} sx={{ m: 0 }}
+            control={<Switch size="small" checked={!!value} onChange={e => update(e.target.checked)} />}
+            label={<Typography variant="body2">{label}</Typography>}
+          />
+        )
+      case 'select': {
+        const opts = p.options ?? []
+        const sel = value == null ? '' : String(value)
+        // 少量选项（多样式切换等场景）用分段按钮，一目了然；多选项用下拉
+        if (opts.length > 0 && opts.length <= 4) {
+          return (
+            <Box key={p.key}>
+              <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5 }}>{label}</Typography>
+              <ToggleButtonGroup
+                size="small"
+                exclusive
+                fullWidth
+                value={sel}
+                onChange={(_e, v) => { if (v) update(v) }}
+              >
+                {opts.map(o => (
+                  <ToggleButton key={o} value={o} sx={{ textTransform: 'none', fontSize: '0.75rem' }}>
+                    {o}
+                  </ToggleButton>
+                ))}
+              </ToggleButtonGroup>
+            </Box>
+          )
+        }
+        return (
+          <FormControl key={p.key} size="small" fullWidth>
+            <InputLabel>{label}</InputLabel>
+            <Select label={label} value={sel} onChange={e => update(e.target.value)}>
+              {opts.map(o => <MenuItem key={o} value={o}>{o}</MenuItem>)}
+            </Select>
+          </FormControl>
+        )
+      }
+      case 'slider':
+        return (
+          <Box key={p.key}>
+            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+              {label}: {String(value ?? '')}
+            </Typography>
+            <Slider
+              min={p.min ?? 0} max={p.max ?? 100} step={p.step ?? 1}
+              value={typeof value === 'number' ? value : (p.min ?? 0)}
+              onChange={(_e, v) => update(Array.isArray(v) ? v[0] : v)}
+              size="small"
+            />
+          </Box>
+        )
+      default:
+        return null
+    }
+  }
 
   function startRename() {
     setRenameValue(widget.widgetName ?? widget.type.replace(/([A-Z])/g, ' $1').trim())
@@ -1015,6 +1113,18 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
           >
             {t('widgetProperties.openCodeEditor')}
           </Button>
+          {customSchema.length > 0 && (
+            <>
+              <Divider />
+              <SectionLabel>{t('widgetProperties.customProps')}</SectionLabel>
+              <Typography variant="caption" sx={{ color: 'text.disabled', lineHeight: 1.6 }}>
+                {t('widgetProperties.customPropsHint')}
+              </Typography>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                {customSchema.map(renderCustomPropField)}
+              </Box>
+            </>
+          )}
         </Box>
       )}
 

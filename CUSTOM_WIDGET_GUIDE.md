@@ -317,3 +317,148 @@ window.parent.postMessage({ __xstatSubscribe: [] }, '*');
 ```
 
 > 提示：`window.parent.postMessage({ __xstatSubscribe: [...] }, '*')` 放在控件脚本**顶部**（其余查找逻辑之前）即可；控件 iframe 重建后脚本会重新执行，父页面会自动重新读取声明。
+
+## 10. 可配置属性（属性面板映射）
+
+想让控件的某些值在**右侧属性面板**里直接修改（颜色 / 文字 / 开关 / 下拉等），在控件 HTML 里声明一个 `__xstatConfig` 数组即可，属性面板会自动生成对应表单：
+
+```html
+<script>
+  window.__xstatConfig = [
+    { key: 'ringColor', label: '圆环颜色', type: 'color',   default: '#03dac6' },
+    { key: 'unit',      label: '单位',     type: 'text',    default: '°C' },
+    { key: 'decimals',  label: '小数位',   type: 'number',  default: 1, min: 0, max: 3, step: 1 },
+    { key: 'showBg',    label: '显示背景', type: 'boolean', default: true },
+    { key: 'variant',   label: '样式',     type: 'select',  options: ['扁平', '圆环'], default: '扁平' },
+    { key: 'speed',     label: '速度',     type: 'slider',  min: 0, max: 10, step: 0.5, default: 1 }
+  ];
+</script>
+```
+
+### 字段说明
+
+| type | 表单控件 | 支持的附加字段 |
+|---|---|---|
+| `color` | 颜色选择器 | `default` |
+| `text` | 文本框 | `default` |
+| `number` | 数字输入 | `default` / `min` / `max` / `step` |
+| `boolean` | 开关 | `default` |
+| `select` | 下拉 | `options: [...]` / `default` |
+| `slider` | 滑块 | `default` / `min` / `max` / `step` |
+
+通用字段：`key`（必填，唯一标识）、`label`（属性面板显示名，缺省用 key）。
+
+### 在脚本里读取
+
+属性面板修改后，值随每次数据推送一起到达，用 `e.data.props` 读取：
+
+```js
+window.addEventListener('message', function (e) {
+  var sensors = e.data && e.data.sensors;
+  var props = (e.data && e.data.props) || {};
+  if (sensors) {
+    // 用 props 里的值更新 UI
+    document.getElementById('ring').style.color = props.ringColor || '#03dac6';
+    document.getElementById('unit').textContent = props.unit || '';
+    document.getElementById('bg').style.display = props.showBg ? '' : 'none';
+  }
+});
+```
+
+> 要点：
+> - `props` 的值为「属性面板里改过的值」，没改过的项不会出现 —— 用 `props.xxx || 默认值` 兜底
+> - `default` 只是表单的初始显示值，不强制；脚本里仍需自己处理缺省
+> - `__xstatConfig` 必须是**字面量数组**（写成常量，不要动态生成），且数组整体是合法 JSON 风格（键加引号、字符串用引号）；解析失败只会不显示表单，不影响控件运行
+
+### 实用技巧
+
+**① 字号比例（slider）的两种缩放方式**
+
+控件多用相对单位自适应，改字号需要按控件写法选对应方案：
+
+- **rem 基准控件**（脚本里 `fitContent()` 设 `document.documentElement.style.fontSize`，字号写 `48rem` 这种）：把比例乘进基准值：
+
+  ```js
+  var curScale = 1;
+  function fitContent() {
+    document.documentElement.style.fontSize = (window.innerHeight / 100) * curScale + 'px';
+  }
+  // message 里：curScale = props.fontScale != null ? Number(props.fontScale) : 1; fitContent();
+  ```
+
+- **vmin 单位控件**（字号直接写 `48vmin`，没有 fitContent）：`vmin` 拿不到系数，用 `zoom` 整体缩放（Chromium 支持，无需改 CSS）：
+
+  ```js
+  document.documentElement.style.zoom = props.fontScale != null ? Number(props.fontScale) : 1;
+  ```
+
+**② 换主题色（CSS 变量）**
+
+把颜色定义成 CSS 变量，脚本里改变量即可整体换肤：
+
+```css
+.pipboy-wrapper { --pip-green: #1aff40; --pip-glow: rgba(26, 255, 64, 0.6); }
+```
+```js
+var wrapper = document.querySelector('.pipboy-wrapper');
+if (wrapper && props.themeColor) {
+  var c = props.themeColor;
+  wrapper.style.setProperty('--pip-green', c);
+  var r = parseInt(c.slice(1, 3), 16), g = parseInt(c.slice(3, 5), 16), b = parseInt(c.slice(5, 7), 16);
+  wrapper.style.setProperty('--pip-glow', 'rgba(' + r + ',' + g + ',' + b + ',0.6)');
+}
+```
+
+**③ 图标颜色 / 显隐**
+
+SVG 图标给 `id`，用 inline style 覆盖 CSS 里的 `fill`（inline style 优先级更高）：
+
+```html
+<svg id="icon" viewBox="0 0 24 24"><path d="..."/></svg>
+```
+```js
+document.getElementById('icon').style.fill    = props.iconColor || '#00bfff';
+document.getElementById('icon').style.display = props.showIcon === false ? 'none' : '';
+```
+
+**④ 完整示例**：项目源码目录下的 `XStat-Hardware-Monitoring/workspace.xstatpanel` 默认参考控件（CPU 功耗 / RAM 使用率 / CPU 频率 / 显存 / GPU 功耗 / Pip-Boy 均已用该机制改造），可直接在编辑器里导入参考。
+
+**⑤ 多样式切换（一个组件多套样式）**
+
+用 `type: 'select'` 声明样式选择参数（≤4 个选项时属性面板显示为分段按钮，点击即切换）。每种样式写成独立的 CSS 类，脚本按所选值切换类名：
+
+```html
+<style>
+  .wrap.neon  { background: linear-gradient(135deg,#0f2027,#203a43); color: #00ff88; }
+  .wrap.paper { background: #f5f0e6; color: #222; }
+  .wrap.cyber { background: #0d0221; color: #ff2d95; }
+</style>
+<script>
+  /* 声明样式选择参数 */
+  window.__xstatConfig = [
+    { key: 'variant', label: '样式', type: 'select', options: ['霓虹', '纸张', '赛博'], default: '霓虹' }
+  ];
+</script>
+<body>
+  <div id="wrap" class="wrap neon">
+    <div class="title">CPU</div>
+    <div class="value" id="value">--</div>
+  </div>
+  <script>
+    window.addEventListener('message', function (e) {
+      var props = (e.data && e.data.props) || {};
+      /* 按所选样式切换类名（key 值 → CSS 类名） */
+      var map = { '霓虹': 'neon', '纸张': 'paper', '赛博': 'cyber' };
+      var wrap = document.getElementById('wrap');
+      var v = props.variant != null ? props.variant : '霓虹';
+      wrap.className = 'wrap ' + (map[v] || 'neon');
+      /* 传感器渲染逻辑… */
+    });
+  </script>
+```
+
+要点：
+- 各样式用**独立的 CSS 类**（挂在同一个根元素上），互不干扰；公共样式放 `.wrap`，差异放 `.wrap.neon / .wrap.paper …`
+- `map` 把配置值映射到类名，可随意命名选项文本，不必与类名一致
+- 未改过时 `props.variant` 不存在，用 `default` 兜底即可
+- 多套样式也可以各自带配色，配合 `themeColor` 之类的 `color` 参数做更细的调节

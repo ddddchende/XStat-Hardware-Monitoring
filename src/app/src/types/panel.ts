@@ -95,6 +95,9 @@ export interface PanelWidget {
   // Files attached to this widget — filename → base64 data URL
   // Referenced in HTML as ./data/{filename}
   customFiles?: Record<string, string>
+  // Custom widget — user-configurable props declared via __xstatConfig in the
+  // HTML; edited in the properties panel and injected via postMessage.
+  customProps?: Record<string, string | number | boolean>
   // Image widget
   imageDataUrl?: string
   imageObjectFit?: 'contain' | 'cover' | 'fill' | 'none'

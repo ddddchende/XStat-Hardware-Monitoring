@@ -159,6 +159,8 @@
   "widgetProperties.customHtmlWidget": "Custom HTML Widget",
   "widgetProperties.customDesc": "Write any HTML / CSS / JS. XStat injects live sensor data via",
   "widgetProperties.customDescSuffix": "on every poll tick.",
+  "widgetProperties.customProps": "Configurable Properties",
+  "widgetProperties.customPropsHint": "Declared via __xstatConfig in the widget HTML. Read them in your script via e.data.props.",
   "widgetProperties.openCodeEditor": "Open Code Editor",
   "widgetProperties.image": "Image",
   "widgetProperties.svgIcon": "SVG Icon",
