@@ -75,9 +75,20 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
   const zoomRef           = useRef(zoom)
   const panXRef           = useRef(panX)
   const panYRef           = useRef(panY)
+  const renameInputRef    = useRef<HTMLInputElement>(null)
   const panRef            = useRef<{ active: boolean; mx0: number; my0: number; px0: number; py0: number }>(
     { active: false, mx0: 0, my0: 0, px0: 0, py0: 0 }
   )
+
+  // Focus the rename field only after the panel menu has finished closing —
+  // autoFocus fires while the menu's focus-restore is still active, the input
+  // immediately blurs, onBlur commits an unchanged name and the field vanishes
+  // (i.e. "rename does nothing").
+  useEffect(() => {
+    if (!renamingPanel) return
+    const t = setTimeout(() => renameInputRef.current?.focus(), 250)
+    return () => clearTimeout(t)
+  }, [renamingPanel])
 
   useEffect(() => { zoomRef.current = zoom }, [zoom])
   useEffect(() => { panXRef.current = panX }, [panX])
@@ -464,7 +475,7 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
         {renamingPanel ? (
           <TextField
             size="small"
-            autoFocus
+            inputRef={renameInputRef}
             value={renameValue}
             onChange={e => setRenameValue(e.target.value)}
             onBlur={commitRename}
