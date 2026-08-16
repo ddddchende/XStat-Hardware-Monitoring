@@ -71,6 +71,24 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
   const [currentFilePath, setCurrentFilePath]   = useState<string | null>(
     () => localStorage.getItem('xstat:workspace-file'),
   )
+  // Workspace dirty tracking — the Save button is only enabled after an edit.
+  // panels changes identity on every reducer edit; selection / canvas hover do
+  // not touch it, so those never mark the workspace as modified.
+  const [dirty, setDirty] = useState(false)
+  const panelsRef = useRef(panels)
+  const suppressDirtyRef = useRef(false)
+  // Called right after a programmatic load (open / startup / default workspace):
+  // the next panels identity change is the load itself and must not mark dirty.
+  const resetDirty = useCallback(() => {
+    suppressDirtyRef.current = true
+    setDirty(false)
+  }, [])
+  useEffect(() => {
+    if (panelsRef.current === panels) return
+    panelsRef.current = panels
+    if (suppressDirtyRef.current) { suppressDirtyRef.current = false; return }
+    setDirty(true)
+  }, [panels])
   const canvasWrapperRef  = useRef<HTMLDivElement>(null)
   const zoomRef           = useRef(zoom)
   const panXRef           = useRef(panX)
@@ -316,11 +334,13 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
     const content = exportWorkspace()
     if (currentFilePath) {
       await window.xstat.workspace.save(currentFilePath, content)
+      setDirty(false)
     } else {
       const res = await window.xstat.workspace.saveAs(content)
       if (!res.canceled && res.filePath) {
         setCurrentFilePath(res.filePath)
         persistFilePath(res.filePath)
+        setDirty(false)
       }
     }
   }
@@ -330,6 +350,7 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
     if (!res.canceled && res.filePath) {
       setCurrentFilePath(res.filePath)
       persistFilePath(res.filePath)
+      setDirty(false)
     }
   }
 
@@ -339,6 +360,7 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
     const ws = parseWorkspaceContent(res.content)
     if (!ws) return
     loadWorkspace(ws)
+    resetDirty()
     setCurrentFilePath(res.filePath ?? null)
     persistFilePath(res.filePath ?? null)
     setSelectedWidgetIds([])
@@ -365,6 +387,7 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
           return
         }
         loadWorkspace(ws)
+        resetDirty()
         setCurrentFilePath(savedPath)
       })
       return
@@ -377,6 +400,7 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
       const ws = parseWorkspaceContent(res.content)
       if (!ws) return
       loadWorkspace(ws)
+      resetDirty()
       setSelectedWidgetIds([])
       setCanvasSelected(false)
     })
@@ -696,11 +720,14 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
           </IconButton>
         </Tooltip>
 
-        {/* Save (Ctrl+S) — writes to the associated file, or prompts Save As */}
+        {/* Save (Ctrl+S) — writes to the associated file, or prompts Save As.
+            Enabled only when there are unsaved changes. */}
         <Tooltip title={t('panelEditor.saveWorkspace')} arrow>
-          <IconButton size="small" onClick={handleSave}>
-            <SaveIcon fontSize="small" />
-          </IconButton>
+          <span>
+            <IconButton size="small" onClick={handleSave} disabled={!dirty}>
+              <SaveIcon fontSize="small" />
+            </IconButton>
+          </span>
         </Tooltip>
 
         {/* Save As — always prompts for a new path */}

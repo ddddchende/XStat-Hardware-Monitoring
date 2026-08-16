@@ -11,6 +11,7 @@ import android.view.View
 import android.view.WindowManager
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -43,6 +44,7 @@ class MainActivity : AppCompatActivity() {
         const val EXTRA_URL = "net.xstat.companion.EXTRA_URL"
         private const val HEALTH_INTERVAL_MS = 1_000L
         private const val MAX_FAILURES = 3
+        private const val RETRY_INTERVAL_MS = 3_000L
         private const val HINT_DURATION_MS = 5_000L
         private const val MAX_HINT_SHOWS = 3
         private const val HINT_FADE_IN_MS = 250L
@@ -58,9 +60,30 @@ class MainActivity : AppCompatActivity() {
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private val hintHandler = Handler(Looper.getMainLooper())
+    private val retryHandler = Handler(Looper.getMainLooper())
     private val monitorRunning = AtomicBoolean(false)
     private var consecutiveFailures = 0
     private var currentBaseUrl: String? = null
+
+    // True when the last load attempt ended in a main-frame error; used to tell
+    // onPageFinished whether it followed a success or a failure.
+    private var loadFailed = false
+    private var retryScheduled = false
+
+    // When the panel fails to load, reload it every RETRY_INTERVAL_MS until it
+    // succeeds. Uses its own handler so stopConnectionMonitor() (which clears
+    // mainHandler) never cancels the retry loop.
+    private val retryRunnable = object : Runnable {
+        override fun run() {
+            val url = currentBaseUrl
+            if (url == null || errorView.visibility != View.VISIBLE) {
+                retryScheduled = false
+                return
+            }
+            webView.loadUrl(url)
+            retryHandler.postDelayed(this, RETRY_INTERVAL_MS)
+        }
+    }
 
     // Opens Settings; if the connection config changed there, the page reloads
     // (or the discovery flow re-runs) instead of showing the stale panel.
@@ -107,7 +130,7 @@ class MainActivity : AppCompatActivity() {
             showError(getString(R.string.error_no_host))
         }
 
-        retryButton.setOnClickListener { restartApp() }
+        retryButton.setOnClickListener { retryNow() }
     }
 
     // ── Settings access (no on-screen button) ───────────────────────────────
@@ -314,6 +337,36 @@ class MainActivity : AppCompatActivity() {
         webView.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest) = false
 
+            override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
+                loadFailed = false
+            }
+
+            override fun onPageFinished(view: WebView, url: String) {
+                // onPageFinished also fires after a failed load; only treat it
+                // as success when no error happened since the last onPageStarted.
+                if (loadFailed) return
+                stopAutoRetry()
+                if (errorView.visibility == View.VISIBLE) {
+                    errorView.visibility = View.GONE
+                    webView.visibility   = View.VISIBLE
+                }
+                val baseUrl = currentBaseUrl
+                if (baseUrl != null && !monitorRunning.get()) {
+                    startConnectionMonitor(baseUrl)
+                }
+            }
+
+            // Main-frame load error (API 23+)
+            override fun onReceivedError(
+                view: WebView,
+                request: WebResourceRequest,
+                error: WebResourceError
+            ) {
+                if (request.isForMainFrame) {
+                    handleLoadError(error.description?.toString() ?: "")
+                }
+            }
+
             // Catches main-frame load errors (deprecated path, API < 23)
             @Suppress("OVERRIDE_DEPRECATION")
             override fun onReceivedError(
@@ -324,7 +377,7 @@ class MainActivity : AppCompatActivity() {
             ) {
                 // Never surface unknown-scheme navigations as a fatal error page.
                 if (errorCode == WebViewClient.ERROR_UNSUPPORTED_SCHEME) return
-                showError(getString(R.string.error_load_failed, description))
+                handleLoadError(description)
             }
         }
 
@@ -374,6 +427,36 @@ class MainActivity : AppCompatActivity() {
         errorText.text       = message
     }
 
+    // ── Load failure auto-retry ─────────────────────────────────────────────
+
+    /** Main-frame load failure → show the error view and start auto-retry. */
+    private fun handleLoadError(description: String) {
+        loadFailed = true
+        showError(getString(R.string.error_load_failed, description))
+        startAutoRetry()
+    }
+
+    private fun startAutoRetry() {
+        if (currentBaseUrl == null || retryScheduled) return
+        retryScheduled = true
+        retryHandler.postDelayed(retryRunnable, RETRY_INTERVAL_MS)
+    }
+
+    private fun stopAutoRetry() {
+        retryScheduled = false
+        retryHandler.removeCallbacks(retryRunnable)
+    }
+
+    /** Manual retry: reload the panel immediately (auto-retry keeps running). */
+    private fun retryNow() {
+        val url = currentBaseUrl
+        if (url != null) {
+            webView.loadUrl(url)
+        } else {
+            restartApp()
+        }
+    }
+
     // ── Navigation & lifecycle ──────────────────────────────────────────────
 
     private fun restartApp() {
@@ -387,6 +470,7 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         stopConnectionMonitor()
+        stopAutoRetry()
     }
 
     private fun hideSystemUi() {
