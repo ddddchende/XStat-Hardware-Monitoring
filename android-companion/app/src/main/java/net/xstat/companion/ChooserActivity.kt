@@ -39,7 +39,7 @@ class ChooserActivity : AppCompatActivity() {
     private fun showManualUrlDialog() {
         val input = EditText(this).apply {
             hint = getString(R.string.manual_url_hint)
-            setText(Prefs.manualUrl(this@ChooserActivity) ?: "")
+            setText(Prefs.activeUrl(this@ChooserActivity) ?: "")
             setSelectAllOnFocus(true)
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
         }

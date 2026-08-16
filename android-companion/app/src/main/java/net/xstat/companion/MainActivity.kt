@@ -17,7 +17,9 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Button
 import android.widget.TextView
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.atomic.AtomicBoolean
@@ -60,6 +62,15 @@ class MainActivity : AppCompatActivity() {
     private var consecutiveFailures = 0
     private var currentBaseUrl: String? = null
 
+    // Opens Settings; if the connection config changed there, the page reloads
+    // (or the discovery flow re-runs) instead of showing the stale panel.
+    private val settingsLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == RESULT_OK) {
+                applySettingsChanges()
+            }
+        }
+
     // Volume + / Volume − pressed together opens Settings (no on-screen button)
     private var volumeUpPressed = false
     private var volumeDownPressed = false
@@ -74,6 +85,7 @@ class MainActivity : AppCompatActivity() {
             WindowManager.LayoutParams.FLAG_FULLSCREEN,
             WindowManager.LayoutParams.FLAG_FULLSCREEN
         )
+        applyKeepScreenOn()
         hideSystemUi()
 
         setContentView(R.layout.activity_main)
@@ -129,11 +141,52 @@ class MainActivity : AppCompatActivity() {
     private fun openSettings() {
         // Pause the health monitor while Settings is on top; it restarts onResume
         stopConnectionMonitor()
-        startActivity(Intent(this, SettingsActivity::class.java))
+        settingsLauncher.launch(Intent(this, SettingsActivity::class.java))
+    }
+
+    /** Re-applies connection config changes made in Settings. */
+    private fun applySettingsChanges() {
+        when (Prefs.mode(this)) {
+            "lan" -> restartApp() // switched to LAN discovery → re-run the flow
+            "manual" -> {
+                val target = Prefs.activeUrl(this)
+                if (target != null && target != currentBaseUrl) {
+                    currentBaseUrl = target
+                    loadUrl(target)
+                }
+            }
+            else -> restartApp() // config cleared → back to the chooser
+        }
+    }
+
+    /** Applies the "keep screen on" preference to this window. */
+    private fun applyKeepScreenOn() {
+        if (Prefs.keepScreenOn(this)) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+
+    /** True when the app locale no longer matches the saved language preference. */
+    private fun languageChanged(): Boolean {
+        val pref = Prefs.language(this)
+        val current = AppCompatDelegate.getApplicationLocales()
+        if (pref.isNullOrEmpty()) return !current.isEmpty
+        if (current.isEmpty) return true
+        val want = if (pref == "zh") "zh" else "en"
+        return current.get(0)?.language != want
     }
 
     override fun onResume() {
         super.onResume()
+        // Language may have changed in Settings → recreate so strings update
+        if (languageChanged()) {
+            recreate()
+            return
+        }
+        // Keep-screen-on may have changed in Settings; re-apply
+        applyKeepScreenOn()
         // Re-arm the monitor after returning from Settings
         val url = currentBaseUrl
         if (url != null && !monitorRunning.get()) {

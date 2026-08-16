@@ -1,10 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- XStat theme palette -->
-    <color name="bg">#0c0c0e</color>
-    <color name="bg_surface">#141418</color>
-    <color name="purple">#7c6ef5</color>
+    <!-- XStat theme palette — quiet dark UI: blue-black surfaces, one brand
+         accent (purple), red reserved for destructive actions -->
+    <color name="bg">#0d0f14</color>
+    <color name="bg_surface">#161a23</color>
+    <color name="purple">#8b7cf8</color>
     <color name="cyan">#03dac6</color>
-    <color name="text">#f0f0f4</color>
-    <color name="text_muted">#8080a0</color>
+    <color name="text">#e8eaf0</color>
+    <color name="text_muted">#8a93a6</color>
+    <color name="slate">#333c4d</color>
+    <color name="danger">#e5484d</color>
+    <color name="stroke">#2c3242</color>
 </resources>

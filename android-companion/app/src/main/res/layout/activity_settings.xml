@@ -1,29 +1,49 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Settings: current configuration + clear-config action -->
+<!-- Settings: connection configuration (URL list + activate) + keep-screen-on + language -->
 <LinearLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:background="@color/bg"
-    android:padding="24dp">
+    android:padding="20dp">
 
-    <TextView
-        android:layout_width="wrap_content"
+    <!-- Title row: title + borderless globe (language) button -->
+    <LinearLayout
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="@string/settings_title"
-        android:textColor="@color/text"
-        android:textSize="22sp"
-        android:textStyle="bold"
-        android:letterSpacing="0.03"
-        android:layout_marginBottom="20dp" />
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="16dp">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/settings_title"
+            android:textColor="@color/text"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            android:letterSpacing="0.03" />
+
+        <ImageButton
+            android:id="@+id/btnLanguage"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:src="@drawable/ic_globe"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/settings_language"
+            android:scaleType="fitCenter"
+            android:padding="8dp" />
+    </LinearLayout>
 
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="@string/settings_config_label"
         android:textColor="@color/text_muted"
-        android:textSize="13sp" />
+        android:textSize="12sp"
+        android:letterSpacing="0.08" />
 
     <TextView
         android:id="@+id/configSummary"
@@ -33,15 +53,89 @@
         android:textSize="16sp"
         android:lineSpacingMultiplier="1.3"
         android:layout_marginTop="6dp"
-        android:layout_marginBottom="32dp" />
+        android:layout_marginBottom="20dp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/settings_urls_label"
+        android:textColor="@color/text_muted"
+        android:textSize="12sp"
+        android:letterSpacing="0.08"
+        android:layout_marginBottom="8dp" />
+
+    <!-- Saved address list; scrolls when many addresses are stored -->
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:id="@+id/urlList"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+    </ScrollView>
+
+    <Button
+        android:id="@+id/btnAddUrl"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/settings_add_url"
+        android:backgroundTint="@color/purple"
+        android:textColor="@color/text"
+        android:padding="12dp"
+        android:layout_marginTop="4dp" />
+
+    <Button
+        android:id="@+id/btnLan"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/settings_lan_button"
+        android:background="@drawable/bg_btn_outline"
+        android:backgroundTint="@color/purple"
+        android:textColor="@color/purple"
+        android:padding="12dp"
+        android:layout_marginTop="8dp" />
+
+    <!-- Keep screen on -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="@drawable/bg_card"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:paddingTop="10dp"
+        android:paddingBottom="10dp"
+        android:layout_marginTop="8dp">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/settings_keep_screen_on"
+            android:textColor="@color/text"
+            android:textSize="16sp" />
+
+        <Switch
+            android:id="@+id/switchKeepScreenOn"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+    </LinearLayout>
 
     <Button
         android:id="@+id/btnClear"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="@string/settings_clear"
-        android:backgroundTint="@color/bg_surface"
-        android:textColor="@color/text" />
+        android:background="@drawable/bg_btn_outline"
+        android:backgroundTint="@color/danger"
+        android:textColor="@color/danger"
+        android:padding="12dp"
+        android:layout_marginTop="8dp" />
 
     <Button
         android:id="@+id/btnBack"
@@ -50,6 +144,7 @@
         android:text="@string/settings_back"
         android:backgroundTint="@color/purple"
         android:textColor="@color/text"
-        android:layout_marginTop="16dp" />
+        android:padding="12dp"
+        android:layout_marginTop="8dp" />
 
 </LinearLayout>

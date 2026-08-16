@@ -38,7 +38,7 @@ class SplashActivity : AppCompatActivity() {
         when (Prefs.mode(this)) {
             // Manual URL saved → connect directly, skip discovery
             "manual" -> {
-                val url = Prefs.manualUrl(this)
+                val url = Prefs.activeUrl(this)
                 if (!url.isNullOrEmpty()) {
                     launchMain(url)
                 } else {
