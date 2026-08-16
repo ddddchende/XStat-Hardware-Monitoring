@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState, useContext, useMemo } from 'react'
-import type { PanelWidget } from '@/types/panel'
+import type { PanelWidget, CustomTextStyle } from '@/types/panel'
 import type { HardwareSnapshot, SensorReading } from '@/types/sensors'
 import { PanelSubscriptionContext } from '@/panel/PanelSubscriptionContext'
 import { getServiceBase } from '@/utils/getServiceBase'
@@ -251,18 +251,22 @@ function inferSubscription(html: string): SubscribeRule[] {
  *     { key: 'decimals',  label: '小数位',   type: 'number',  default: 1, min: 0, max: 3 },
  *     { key: 'showBg',    label: '显示背景', type: 'boolean', default: true },
  *     { key: 'variant',   label: '样式',     type: 'select',  options: ['a','b'], default: 'a' },
- *     { key: 'speed',     label: '速度',     type: 'slider',  min: 0, max: 10, step: 0.5, default: 1 }
+ *     { key: 'speed',     label: '速度',     type: 'slider',  min: 0, max: 10, step: 0.5, default: 1 },
+ *     { key: 'valueStyle', label: '数值样式', type: 'textstyle' }
  *   ];
  *
- * type: color | text | number | boolean | select | slider | sensor
+ * type: color | text | number | boolean | select | slider | sensor | textstyle
  * 可选字段：label / default / min / max / step / options
  * sensor：值 = 传感器 id，属性面板用传感器选择器；运行时 props[key] 即 id，控件脚本据此在 sensors 里查找（父页面会自动订阅该传感器）。
+ * textstyle：值 = 文本样式对象 { color, fontSize, bold, fontFamily, italic, textShadow }，
+ *   属性面板渲染与系统内置组件相同的文本样式编辑器（颜色/字号/粗体/斜体/字体/阴影），
+ *   控件脚本通过 props[key].color / props[key].fontSize 等自行应用。
  */
 export interface CustomPropSchema {
   key: string
   label?: string
-  type: 'color' | 'text' | 'number' | 'boolean' | 'select' | 'slider' | 'sensor'
-  default?: string | number | boolean
+  type: 'color' | 'text' | 'number' | 'boolean' | 'select' | 'slider' | 'sensor' | 'textstyle'
+  default?: string | number | boolean | CustomTextStyle
   min?: number
   max?: number
   step?: number

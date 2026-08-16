@@ -50,7 +50,10 @@ export function useSystemInfo(): UseSystemInfoResult {
         // when nothing has loaded successfully yet.
         if (!_cache) setError(err instanceof Error ? err.message : String(err))
       } finally {
-        if (!cancelled && !_cache) setLoading(false)
+        // Always clear loading once the first fetch settles (success or error);
+        // keeping it true after a successful load would leave the widget stuck
+        // on "Loading…" forever.
+        if (!cancelled) setLoading(false)
       }
     }
 

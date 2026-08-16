@@ -21,7 +21,7 @@ import KeyboardDoubleArrowUpIcon    from '@mui/icons-material/KeyboardDoubleArro
 import KeyboardArrowUpIcon          from '@mui/icons-material/KeyboardArrowUp'
 import KeyboardArrowDownIcon        from '@mui/icons-material/KeyboardArrowDown'
 import KeyboardDoubleArrowDownIcon  from '@mui/icons-material/KeyboardDoubleArrowDown'
-import type { PanelWidget, LayoutItem, BoxAnimation, TextShadowStyle } from '@/types/panel'
+import type { PanelWidget, LayoutItem, BoxAnimation, TextShadowStyle, CustomTextStyle } from '@/types/panel'
 import type { HardwareSnapshot, SensorReading } from '@/types/sensors'
 import { SensorPickerDialog }   from '@/components/SensorPickerDialog'
 import { boxEffectSupportsRandom } from '@/components/widgets/boxEffects'
@@ -203,6 +203,93 @@ function AccentColorRow({ value, onChange, visible, onVisibleChange }: {
   )
 }
 
+/** Small labeled slider row for text-shadow parameters. */
+function ShadowSlider({ label, value, min, max, onChange }: {
+  label: string; value: number; min: number; max: number
+  onChange: (v: number) => void
+}) {
+  return (
+    <Box>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+        <Typography variant="caption" sx={{ color: 'text.secondary' }}>{label}</Typography>
+        <Typography variant="caption" sx={{ color: 'text.disabled' }}>{Math.round(value)}</Typography>
+      </Box>
+      <Slider
+        size="small"
+        min={min}
+        max={max}
+        value={value}
+        onChange={(_, v) => onChange(Number(v))}
+        sx={{ '& .MuiSlider-thumb': { width: 14, height: 14 } }}
+      />
+    </Box>
+  )
+}
+
+/**
+ * Text-shadow editor: enable switch + color + strength/blur/distance/angle.
+ * Defined at module level so its component identity stays stable across renders —
+ * defining it inside a render body would remount the subtree on every update and
+ * drop the slider's pointer capture mid-drag.
+ */
+function ShadowControls({ shadow, onChange }: {
+  shadow?: TextShadowStyle
+  onChange: (s: TextShadowStyle) => void
+}) {
+  const { t } = useTranslation()
+  return (
+    <Box sx={{ mt: 0.5 }}>
+      <FormControlLabel
+        sx={{ mr: 0, ml: 0 }}
+        control={
+          <Switch
+            size="small"
+            checked={shadow?.enabled ?? false}
+            onChange={e => onChange({ ...(shadow ?? {}), enabled: e.target.checked })}
+          />
+        }
+        label={<Typography variant="body2">{t('widgetProperties.textShadow')}</Typography>}
+      />
+      {shadow?.enabled && (
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, pl: 1, borderLeft: '2px solid rgba(255,255,255,0.08)' }}>
+          <ColorSwatchesPicker
+            value={shadow.color ?? '#000000'}
+            onChange={c => onChange({ ...shadow, color: c })}
+          />
+          <ShadowSlider
+            label={t('widgetProperties.shadowStrength')}
+            value={shadow.opacity ?? 100}
+            min={0}
+            max={100}
+            onChange={v => onChange({ ...shadow, opacity: v })}
+          />
+          <ShadowSlider
+            label={t('widgetProperties.shadowBlur')}
+            value={shadow.blur ?? 8}
+            min={0}
+            max={40}
+            onChange={v => onChange({ ...shadow, blur: v })}
+          />
+          <ShadowSlider
+            label={t('widgetProperties.shadowDistance')}
+            value={shadow.distance ?? 4}
+            min={0}
+            max={20}
+            onChange={v => onChange({ ...shadow, distance: v })}
+          />
+          <ShadowSlider
+            label={t('widgetProperties.shadowAngle')}
+            value={shadow.angle ?? 45}
+            min={0}
+            max={360}
+            onChange={v => onChange({ ...shadow, angle: v })}
+          />
+        </Box>
+      )}
+    </Box>
+  )
+}
+
 function TextStyleSection({
   title, color, fontSize, bold, fontFamily, italic, fontOptions,
   visible, onVisibleChange,
@@ -228,26 +315,6 @@ function TextStyleSection({
 }) {
   const { t } = useTranslation()
 
-  /** Small labeled slider row for the shadow parameters. */
-  const ShadowSlider = ({ label, value, min, max, onChange }: {
-    label: string; value: number; min: number; max: number
-    onChange: (v: number) => void
-  }) => (
-    <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-        <Typography variant="caption" sx={{ color: 'text.secondary' }}>{label}</Typography>
-        <Typography variant="caption" sx={{ color: 'text.disabled' }}>{Math.round(value)}</Typography>
-      </Box>
-      <Slider
-        size="small"
-        min={min}
-        max={max}
-        value={value}
-        onChange={(_, v) => onChange(Number(v))}
-        sx={{ '& .MuiSlider-thumb': { width: 14, height: 14 } }}
-      />
-    </Box>
-  )
   return (
     <Box>
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
@@ -321,55 +388,7 @@ function TextStyleSection({
           )}
         />
         {onShadowChange && (
-          <Box sx={{ mt: 0.5 }}>
-            <FormControlLabel
-              sx={{ mr: 0, ml: 0 }}
-              control={
-                <Switch
-                  size="small"
-                  checked={shadow?.enabled ?? false}
-                  onChange={e => onShadowChange({ ...(shadow ?? {}), enabled: e.target.checked })}
-                />
-              }
-              label={<Typography variant="body2">{t('widgetProperties.textShadow')}</Typography>}
-            />
-            {shadow?.enabled && (
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, pl: 1, borderLeft: '2px solid rgba(255,255,255,0.08)' }}>
-                <ColorSwatchesPicker
-                  value={shadow.color ?? '#000000'}
-                  onChange={c => onShadowChange({ ...shadow, color: c })}
-                />
-                <ShadowSlider
-                  label={t('widgetProperties.shadowStrength')}
-                  value={shadow.opacity ?? 100}
-                  min={0}
-                  max={100}
-                  onChange={v => onShadowChange({ ...shadow, opacity: v })}
-                />
-                <ShadowSlider
-                  label={t('widgetProperties.shadowBlur')}
-                  value={shadow.blur ?? 8}
-                  min={0}
-                  max={40}
-                  onChange={v => onShadowChange({ ...shadow, blur: v })}
-                />
-                <ShadowSlider
-                  label={t('widgetProperties.shadowDistance')}
-                  value={shadow.distance ?? 4}
-                  min={0}
-                  max={20}
-                  onChange={v => onShadowChange({ ...shadow, distance: v })}
-                />
-                <ShadowSlider
-                  label={t('widgetProperties.shadowAngle')}
-                  value={shadow.angle ?? 45}
-                  min={0}
-                  max={360}
-                  onChange={v => onShadowChange({ ...shadow, angle: v })}
-                />
-              </Box>
-            )}
-          </Box>
+          <ShadowControls shadow={shadow} onChange={s => onShadowChange(s)} />
         )}
       </Box>
       )}
@@ -427,12 +446,12 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
   )
 
   /** Render one declared config prop as an editor control; writes back via onUpdate({ customProps }). */
-  const updateCustomProp = (key: string, v: string | number | boolean) =>
+  const updateCustomProp = (key: string, v: string | number | boolean | CustomTextStyle) =>
     onUpdate({ customProps: { ...(widget.customProps ?? {}), [key]: v } })
 
   const renderCustomPropField = (p: CustomPropSchema): React.ReactNode => {
     const value = widget.customProps?.[p.key] ?? p.default
-    const update = (v: string | number | boolean) => updateCustomProp(p.key, v)
+    const update = (v: string | number | boolean | CustomTextStyle) => updateCustomProp(p.key, v)
     const label = p.label ?? p.key
     switch (p.type) {
       case 'color':
@@ -519,6 +538,28 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
                 : (cur || '选择传感器')}
             </Button>
           </Box>
+        )
+      }
+      case 'textstyle': {
+        const ts = (value && typeof value === 'object' ? value : {}) as CustomTextStyle
+        return (
+          <TextStyleSection
+            key={p.key}
+            fontOptions={fontOptions}
+            title={label}
+            color={ts.color ?? '#ffffff'}
+            fontSize={ts.fontSize ?? 14}
+            bold={ts.bold ?? false}
+            fontFamily={ts.fontFamily ?? ''}
+            italic={ts.italic ?? false}
+            onColorChange={c => update({ ...ts, color: c })}
+            onFontSizeChange={s => update({ ...ts, fontSize: s })}
+            onBoldChange={b => update({ ...ts, bold: b })}
+            onFontFamilyChange={f => update({ ...ts, fontFamily: f })}
+            onItalicChange={i => update({ ...ts, italic: i })}
+            shadow={ts.textShadow}
+            onShadowChange={s => update({ ...ts, textShadow: s })}
+          />
         )
       }
       case 'slider':
@@ -1101,6 +1142,10 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
             renderOption={(props, option) => (
               <li {...props} style={{ fontFamily: option, fontSize: '0.82rem' }}>{option}</li>
             )}
+          />
+          <ShadowControls
+            shadow={widget.textShadow}
+            onChange={s => onUpdate({ textShadow: s })}
           />
         </Box>
       )}

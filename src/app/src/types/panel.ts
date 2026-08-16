@@ -39,6 +39,21 @@ export interface TextShadowStyle {
   angle?: number      // shadow direction degrees 0..360
 }
 
+/**
+ * Text style bundle for custom widget `__xstatConfig` props of type 'textstyle'.
+ * Edited with the same TextStyleSection used by built-in widgets (color / font
+ * size / bold / italic / font family / shadow), stored as a single object and
+ * injected via postMessage for the widget script to apply.
+ */
+export interface CustomTextStyle {
+  color?: string
+  fontSize?: number
+  bold?: boolean
+  fontFamily?: string
+  italic?: boolean
+  textShadow?: TextShadowStyle
+}
+
 export interface PanelWidget {
   id: string
   type: WidgetType
@@ -117,7 +132,7 @@ export interface PanelWidget {
   customFiles?: Record<string, string>
   // Custom widget — user-configurable props declared via __xstatConfig in the
   // HTML; edited in the properties panel and injected via postMessage.
-  customProps?: Record<string, string | number | boolean>
+  customProps?: Record<string, string | number | boolean | CustomTextStyle>
   // Image widget
   imageDataUrl?: string
   imageObjectFit?: 'contain' | 'cover' | 'fill' | 'none'
