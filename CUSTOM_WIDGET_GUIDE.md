@@ -320,7 +320,7 @@ window.parent.postMessage({ __xstatSubscribe: [] }, '*');
 
 ## 10. 可配置属性（属性面板映射）
 
-想让控件的某些值在**右侧属性面板**里直接修改（颜色 / 文字 / 开关 / 下拉等），在控件 HTML 里声明一个 `__xstatConfig` 数组即可，属性面板会自动生成对应表单：
+想让控件的某些值在**右侧属性面板**里直接修改（颜色 / 文本样式 / 文字 / 开关 / 下拉等），在控件 HTML 里声明一个 `__xstatConfig` 数组即可，属性面板会自动生成对应表单：
 
 ```html
 <script>
@@ -330,7 +330,8 @@ window.parent.postMessage({ __xstatSubscribe: [] }, '*');
     { key: 'decimals',  label: '小数位',   type: 'number',  default: 1, min: 0, max: 3, step: 1 },
     { key: 'showBg',    label: '显示背景', type: 'boolean', default: true },
     { key: 'variant',   label: '样式',     type: 'select',  options: ['扁平', '圆环'], default: '扁平' },
-    { key: 'speed',     label: '速度',     type: 'slider',  min: 0, max: 10, step: 0.5, default: 1 }
+    { key: 'speed',     label: '速度',     type: 'slider',  min: 0, max: 10, step: 0.5, default: 1 },
+    { key: 'valueStyle', label: '数值样式', type: 'textstyle' }
   ];
 </script>
 ```
@@ -346,6 +347,7 @@ window.parent.postMessage({ __xstatSubscribe: [] }, '*');
 | `select` | 分段按钮 / 下拉 | `options: [...]` / `default` |
 | `slider` | 滑块 | `default` / `min` / `max` / `step` |
 | `sensor` | 传感器选择器 | `default`（传感器 id） |
+| `textstyle` | 文本样式编辑器（颜色 / 字号 / 粗体 / 斜体 / 字体 / 阴影），与内置组件一致 | `default`（部分字段） |
 
 通用字段：`key`（必填，唯一标识）、`label`（属性面板显示名，缺省用 key）。
 
@@ -370,6 +372,70 @@ window.addEventListener('message', function (e) {
 > - `props` 的值为「属性面板里改过的值」，没改过的项不会出现 —— 用 `props.xxx || 默认值` 兜底
 > - `default` 只是表单的初始显示值，不强制；脚本里仍需自己处理缺省
 > - `__xstatConfig` 必须是**字面量数组**（写成常量，不要动态生成），且数组整体是合法 JSON 风格（键加引号、字符串用引号）；解析失败只会不显示表单，不影响控件运行
+
+### textstyle 类型（文本样式）
+
+`textstyle` 的值是一个**文本样式对象**，与系统内置组件的文本样式编辑完全一致：
+
+```js
+{
+  color:      '#f1f5f9',   // 颜色（hex / rgb / rgba）
+  fontSize:   32,          // 字号 px（可选）
+  bold:       false,       // 粗体（可选）
+  italic:     false,       // 斜体（可选）
+  fontFamily: '方正粗雅宋长简体', // 字体名（可选）
+  textShadow: {            // 阴影（可选，开关开启后才有值）
+    enabled:  true,
+    color:    '#000000',
+    opacity:  100,         // 强度 0-100
+    blur:     8,           // 模糊 px
+    distance: 4,           // 距离 px
+    angle:    45           // 角度 0-360
+  }
+}
+```
+
+脚本里读取 `props[key].字段` 应用；建议用下面的辅助函数一次性应用到一个元素（只覆盖用户改过的字段，未改字段保留控件 CSS 默认值）：
+
+```js
+function xstatParseColor(c) {
+  c = String(c || '#000000').trim();
+  var m = c.match(/^#([0-9a-fA-F]{6})$/);
+  if (m) return [parseInt(m[1].slice(0, 2), 16), parseInt(m[1].slice(2, 4), 16), parseInt(m[1].slice(4, 6), 16)];
+  m = c.match(/^#([0-9a-fA-F]{3})$/);
+  if (m) return [parseInt(m[1][0] + m[1][0], 16), parseInt(m[1][1] + m[1][1], 16), parseInt(m[1][2] + m[1][2], 16)];
+  m = c.match(/rgba?\(([^)]+)\)/);
+  if (m) { var p = m[1].split(',').map(function (x) { return parseFloat(x.trim()) || 0 }); return [p[0], p[1], p[2]]; }
+  return [0, 0, 0];
+}
+function xstatShadowCss(s) {
+  if (!s || !s.enabled) return '';
+  var a = (s.angle != null ? s.angle : 45) * Math.PI / 180;
+  var d = s.distance != null ? s.distance : 4;
+  var o = (s.opacity != null ? s.opacity : 100) / 100;
+  var b = s.blur != null ? s.blur : 8;
+  var rgb = xstatParseColor(s.color);
+  return (Math.cos(a) * d).toFixed(1) + 'px ' + (Math.sin(a) * d).toFixed(1) + 'px ' + b + 'px rgba(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ',' + o + ')';
+}
+function xstatApplyText(el, s) {
+  if (!el || !s) return;
+  if (s.color) el.style.color = s.color;
+  if (s.fontSize != null) el.style.fontSize = s.fontSize + 'px';
+  if (s.bold != null) el.style.fontWeight = s.bold ? 'bold' : 'normal';
+  if (s.italic != null) el.style.fontStyle = s.italic ? 'italic' : 'normal';
+  if (s.fontFamily) el.style.fontFamily = s.fontFamily;
+  el.style.textShadow = xstatShadowCss(s.textShadow);
+}
+```
+
+在 message 监听里调用：
+
+```js
+// 声明了 { key: 'valueStyle', label: '数值样式', type: 'textstyle' } 后：
+xstatApplyText(document.getElementById('value'), props.valueStyle);
+```
+
+> 说明：`fontSize` 是**绝对 px**，会覆盖控件 CSS 里的相对单位（rem / vmin）。若控件用相对单位自适应，建议只让用户改颜色 / 粗体 / 斜体 / 字体 / 阴影，字号继续用 `slider` 类型的 `fontScale` 全局缩放（见下方技巧 ①）。
 
 ### 实用技巧
 
