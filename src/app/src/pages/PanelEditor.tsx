@@ -72,23 +72,28 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
     () => localStorage.getItem('xstat:workspace-file'),
   )
   // Workspace dirty tracking — the Save button is only enabled after an edit.
-  // panels changes identity on every reducer edit; selection / canvas hover do
-  // not touch it, so those never mark the workspace as modified.
+  // Both content edits (panels identity change) and switching the active panel
+  // (activePanelId change, stored in the file) mark the workspace as modified;
+  // selection / canvas hover touch neither and never mark it.
   const [dirty, setDirty] = useState(false)
   const panelsRef = useRef(panels)
+  const activeIdRef = useRef(activePanel.id)
   const suppressDirtyRef = useRef(false)
   // Called right after a programmatic load (open / startup / default workspace):
-  // the next panels identity change is the load itself and must not mark dirty.
+  // the next state identity change is the load itself and must not mark dirty.
   const resetDirty = useCallback(() => {
     suppressDirtyRef.current = true
     setDirty(false)
   }, [])
   useEffect(() => {
-    if (panelsRef.current === panels) return
-    panelsRef.current = panels
+    const panelsChanged  = panelsRef.current !== panels
+    const activeChanged  = activeIdRef.current !== activePanel.id
+    if (!panelsChanged && !activeChanged) return
+    panelsRef.current  = panels
+    activeIdRef.current = activePanel.id
     if (suppressDirtyRef.current) { suppressDirtyRef.current = false; return }
     setDirty(true)
-  }, [panels])
+  }, [panels, activePanel.id])
   const canvasWrapperRef  = useRef<HTMLDivElement>(null)
   const zoomRef           = useRef(zoom)
   const panXRef           = useRef(panX)
