@@ -10,7 +10,7 @@ interface Props {
 
 export const ImageWidget: React.FC<Props> = ({ widget }) => {
   const { t } = useTranslation()
-  const { imageDataUrl, imageObjectFit = 'contain', imageOpacity = 1 } = widget
+  const { imageDataUrl, imageObjectFit = 'contain', imageOpacity = 1, imagePixelated } = widget
 
   if (!imageDataUrl) {
     return (
@@ -55,6 +55,7 @@ export const ImageWidget: React.FC<Props> = ({ widget }) => {
           height: '100%',
           objectFit: imageObjectFit,
           opacity: imageOpacity,
+          imageRendering: imagePixelated ? 'pixelated' : 'auto',
           display: 'block',
         }}
       />

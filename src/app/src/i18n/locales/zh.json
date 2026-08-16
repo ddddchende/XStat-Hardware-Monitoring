@@ -179,6 +179,7 @@
   "widgetProperties.cover": "覆盖",
   "widgetProperties.fill": "填充",
   "widgetProperties.opacity": "不透明度 — {{pct}}%",
+  "widgetProperties.pixelated": "像素化（关闭平滑/二次采样）",
   "widgetProperties.box": "矩形框",
   "widgetProperties.boxFill": "填充色",
   "widgetProperties.boxBorderColor": "边框色",

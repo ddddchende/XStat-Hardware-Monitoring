@@ -179,6 +179,7 @@
   "widgetProperties.cover": "Cover",
   "widgetProperties.fill": "Fill",
   "widgetProperties.opacity": "Opacity — {{pct}}%",
+  "widgetProperties.pixelated": "Pixelated (no smoothing)",
   "widgetProperties.box": "Box",
   "widgetProperties.boxFill": "Fill color",
   "widgetProperties.boxBorderColor": "Border color",

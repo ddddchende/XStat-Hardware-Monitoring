@@ -137,6 +137,7 @@ export interface PanelWidget {
   imageDataUrl?: string
   imageObjectFit?: 'contain' | 'cover' | 'fill' | 'none'
   imageOpacity?: number
+  imagePixelated?: boolean         // disable resampling (image-rendering: pixelated)
   // SVG icon widget — raw SVG markup, rendered as-is inside the widget box
   svgCode?: string
   // Box (rectangle frame) widget

@@ -1375,6 +1375,19 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
               sx={{ width: '100%', accentColor: 'primary.main', cursor: 'pointer' }}
             />
           </Box>
+
+          {/* Pixelated (disable resampling) — for pixel-art style */}
+          <FormControlLabel
+            sx={{ mr: 0, ml: 0 }}
+            control={
+              <Switch
+                size="small"
+                checked={widget.imagePixelated ?? false}
+                onChange={e => onUpdate({ imagePixelated: e.target.checked })}
+              />
+            }
+            label={<Typography variant="body2">{t('widgetProperties.pixelated')}</Typography>}
+          />
         </Box>
       )}
 
