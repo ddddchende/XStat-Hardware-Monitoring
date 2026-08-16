@@ -500,7 +500,8 @@ export const PanelCanvas: React.FC<Props> = ({
       onClick={e => { if (e.target === e.currentTarget) { onSelect(null, false); onCanvasSelect?.() } }}
       onMouseDown={e => {
         // Middle button: pan the canvas from anywhere (e.g. after zooming in).
-        if (e.button === 1) { e.preventDefault(); onPanStart?.(e); return }
+        // stopPropagation so the editor's work-area handler doesn't fire twice.
+        if (e.button === 1) { e.preventDefault(); e.stopPropagation(); onPanStart?.(e); return }
         // Left button on empty canvas: pan too.
         if (e.button === 0 && e.target === e.currentTarget) onPanStart?.(e)
       }}

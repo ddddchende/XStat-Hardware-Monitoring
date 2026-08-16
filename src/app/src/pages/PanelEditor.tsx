@@ -160,6 +160,12 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
     document.body.style.cursor = 'grabbing'
   }, [panX, panY])
 
+  // Middle-button pan works across the whole canvas work area (including the
+  // empty space around the panel), not just on the canvas itself.
+  const handleCanvasAreaMouseDown = useCallback((e: React.MouseEvent) => {
+    if (e.button === 1) { e.preventDefault(); handlePanStart(e) }
+  }, [handlePanStart])
+
   const handleWheel = useCallback((e: React.WheelEvent) => {
     const wrapper = canvasWrapperRef.current
     if (!wrapper) return
@@ -726,6 +732,7 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
         {/* Center: Canvas */}
         <Box
           onWheel={handleWheel}
+          onMouseDown={handleCanvasAreaMouseDown}
           sx={{
             flex: 1, overflow: 'hidden',
             background: alpha(theme.palette.background.default, 0.6),
