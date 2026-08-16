@@ -120,12 +120,13 @@ export const CustomWidgetEditor: React.FC<Props> = ({ open, widget, snapshot, on
     }
   }, [open, widget.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Forward sensor data to the preview iframe whenever snapshot updates
+  // Forward sensor data + customProps to the preview iframe so the widget's
+  // __xstatConfig property edits (props) take effect live, mirroring the web panel.
   useEffect(() => {
     const win = iframeRef.current?.contentWindow
-    if (!win || !snapshot) return
-    win.postMessage({ sensors: snapshot.sensors }, '*')
-  }, [snapshot, previewHtml])
+    if (!win) return
+    win.postMessage({ sensors: snapshot?.sensors ?? [], props: widget.customProps ?? {} }, '*')
+  }, [snapshot, previewHtml, widget.customProps])
 
   const handleEditorChange = useCallback((value?: string) => {
     const v = value ?? ''
@@ -475,8 +476,8 @@ export const CustomWidgetEditor: React.FC<Props> = ({ open, widget, snapshot, on
                 const win = iframeRef.current?.contentWindow
                 if (!win) return
                 // Send files ONCE on load so window.__xstatFiles is populated;
-                // subsequent sensor updates skip files to keep messages small.
-                win.postMessage({ sensors: snapshot?.sensors ?? [], files }, '*')
+                // subsequent sensor/props updates skip files to keep messages small.
+                win.postMessage({ sensors: snapshot?.sensors ?? [], files, props: widget.customProps ?? {} }, '*')
               }}
               style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
               title="custom-widget-preview"

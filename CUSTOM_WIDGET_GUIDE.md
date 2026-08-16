@@ -5,7 +5,7 @@ XStat 的「自定义」组件把用户编写的完整 HTML 文档放进沙箱 i
 ## 1. 机制
 
 - **沙箱**：`sandbox="allow-scripts"`（无同源），**不能**访问父窗口 DOM / localStorage / cookie，只能收消息
-- **数据**：每次轮询（默认 250ms）XStat 向 iframe 发 `postMessage({ sensors: [...] })`
+- **数据**：每次轮询（默认 250ms）XStat 向 iframe 发 `postMessage({ sensors: [...], props: {...} })`（props 为属性面板配置，见第 10 节）
 - **画布缩放（zoom）**：父容器 `transform: scale(zoom)`，iframe 视觉自动跟随缩放，内容无需干预
 - **控件 resize**：widget 容器尺寸变化，iframe `width/height:100%` 跟随，**内容必须用相对单位**才会跟随
 
@@ -372,6 +372,20 @@ window.addEventListener('message', function (e) {
 > - `props` 的值为「属性面板里改过的值」，没改过的项不会出现 —— 用 `props.xxx || 默认值` 兜底
 > - `default` 只是表单的初始显示值，不强制；脚本里仍需自己处理缺省
 > - `__xstatConfig` 必须是**字面量数组**（写成常量，不要动态生成），且数组整体是合法 JSON 风格（键加引号、字符串用引号）；解析失败只会不显示表单，不影响控件运行
+
+### props 到达链路与生效时机
+
+属性面板改动 → 写入控件 `customProps` → 随消息 `postMessage` 到 iframe，控件用 `e.data.props` 读取。两端都会推送：
+
+- **web 面板**：每次数据轮询都带 `props`（含最新改动）
+- **编辑器预览**：iframe 加载时和属性改动时推送（与 web 端行为一致）
+
+注意事项：
+
+- **控件无法直接读取属性输入框**：控件运行在沙箱 iframe（`sandbox="allow-scripts"`），不能访问父页面 DOM，`props` 是唯一通道
+- **web 端生效时机**：属性改动会自动 `PUT /api/panel-layout` 推到服务端，**刷新 web 页面**后控件才会拿到新值（布局变更不做实时推送）
+- **初始兜底**：消息到达前控件用 `__xstatConfig` 里的 `default` 值运行；props 到达后按「非空才覆盖」合并（`props.xxx != null ? props.xxx : 默认值`）
+- 编辑器预览转发 props 属框架行为（`CustomWidgetEditor.tsx`），对所有控件生效，但需要重新构建前端面板后才生效
 
 ### textstyle 类型（文本样式）
 
