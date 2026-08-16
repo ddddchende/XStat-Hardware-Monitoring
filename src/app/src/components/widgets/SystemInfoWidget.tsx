@@ -9,6 +9,7 @@ import AccessTimeIcon from '@mui/icons-material/AccessTime'
 import type { PanelWidget } from '@/types/panel'
 import type { DiskInfo } from '@/types/systemInfo'
 import { useSystemInfo } from '@/hooks/useSystemInfo'
+import { textShadowCss } from '@/utils/textShadow'
 
 interface Props {
   widget: PanelWidget
@@ -84,6 +85,7 @@ export const SystemInfoWidget: React.FC<Props> = ({ widget }) => {
     fontWeight: widget.labelBold ? 'bold' : 'normal',
     fontFamily: widget.labelFontFamily ?? 'inherit',
     fontStyle: widget.labelItalic ? 'italic' : 'normal',
+    textShadow: textShadowCss(widget.labelShadow),
   }
   const valueStyle: React.CSSProperties = {
     color: widget.color ?? '#fff',
@@ -93,6 +95,7 @@ export const SystemInfoWidget: React.FC<Props> = ({ widget }) => {
     fontStyle: widget.valueItalic ? 'italic' : 'normal',
     lineHeight: 1.4,
     wordBreak: 'break-word',
+    textShadow: textShadowCss(widget.valueShadow),
   }
 
   if (loading) {

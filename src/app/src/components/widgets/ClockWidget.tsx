@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { Box, Typography } from '@mui/material'
 import type { PanelWidget } from '@/types/panel'
+import { textShadowCss } from '@/utils/textShadow'
 
 interface Props {
   widget: PanelWidget
@@ -27,6 +28,7 @@ export const ClockWidget: React.FC<Props> = ({ widget }) => {
   const timeBold      = widget.timeBold    ?? true
   const timeFontFamily = widget.fontFamily ?? undefined
   const timeItalic    = widget.italic      ?? false
+  const timeShadow    = textShadowCss(widget.timeShadow)
 
   // Date styling
   const showDate       = widget.showDate      ?? false
@@ -36,6 +38,7 @@ export const ClockWidget: React.FC<Props> = ({ widget }) => {
   const dateBold       = widget.dateBold      ?? false
   const dateFontFamily = widget.dateFontFamily ?? undefined
   const dateItalic     = widget.dateItalic    ?? false
+  const dateShadow     = textShadowCss(widget.dateShadow)
 
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000)
@@ -68,6 +71,7 @@ export const ClockWidget: React.FC<Props> = ({ widget }) => {
             lineHeight: 1, userSelect: 'none',
             fontFamily: timeFontFamily,
             fontStyle: timeItalic ? 'italic' : 'normal',
+            textShadow: timeShadow,
           }}
         >
           {timeStr}
@@ -83,6 +87,7 @@ export const ClockWidget: React.FC<Props> = ({ widget }) => {
             userSelect: 'none',
             fontFamily: dateFontFamily,
             fontStyle: dateItalic ? 'italic' : 'normal',
+            textShadow: dateShadow,
           }}
         >
           {dateStr}

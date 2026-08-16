@@ -62,6 +62,41 @@
 
 ---
 
+## API 接口
+
+服务端默认监听 `9421` 端口（C# 路由大小写不敏感）。
+
+### HTTP REST
+
+| 接口 | 方法 | 用途 |
+|---|---|---|
+| `/health` | GET | 健康检查：status / version / isAdmin / processId / executablePath（Electron 检测旧服务用） |
+| `/api/sensors` | GET | 最新传感器快照（全量） |
+| `/api/sensors/{category}` | GET | 按分类过滤的快照（如 `cpu`、`gpu`、`ram`） |
+| `/api/config` | GET | 当前运行配置（pollIntervalMs） |
+| `/api/config` | PUT | 修改轮询间隔（100–30000 ms，立即生效） |
+| `/api/panel-layout` | GET | 当前面板布局 JSON（未推送过则返回 204） |
+| `/api/panel-layout` | PUT | 保存布局，并向所有 SignalR 客户端推送 `LayoutUpdated` 事件 |
+| `/api/widget?id={id}` | GET | 自定义控件 HTML 页（内联 `./data/` 文件，注入字体桥与 paint-check） |
+| `/api/systeminfo` | GET | 静态系统信息：CPU/GPU 型号、内存容量/频率/类型、磁盘、系统版本、Uptime |
+| `/api/fonts/face?name={字体名}` | GET / HEAD | 传输本机字体文件（.ttf / .otf / .woff / .woff2，允许任意跨源） |
+| `/api/fonts/available` | GET | 可传输的字体名列表 |
+| `/api/diag` | GET | 采集诊断：各硬件 Update 耗时、快慢通道总耗时、轮询间隔 |
+| `/favicon.ico` | GET | 重定向到 `/icon.ico` |
+
+### SignalR
+
+- 端点：`/hubs/sensors`
+- 客户端 → 服务端：`Subscribe(filter?)`（按需订阅匹配传感器）、`SubscribeAll()`（订阅全量）、`GetHistory()`（拉取历史快照）
+- 服务端 → 客户端：传感器快照流（按轮询间隔推送；未订阅的旧客户端仍收全量）、`LayoutUpdated`（布局变更事件）
+
+### 静态文件
+
+- `/` — Web 面板入口（index.html + 打包资源）
+- `/icon.ico` 等静态资源
+
+---
+
 ## 技术栈
 
 桌面端 Electron 33 + React 18 + Material UI 6 + TypeScript；服务端 ASP.NET Core 9 + LibreHardwareMonitorLib + SignalR；另附 Android 手机端应用（Kotlin）。

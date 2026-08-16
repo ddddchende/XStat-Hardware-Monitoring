@@ -21,7 +21,7 @@ import KeyboardDoubleArrowUpIcon    from '@mui/icons-material/KeyboardDoubleArro
 import KeyboardArrowUpIcon          from '@mui/icons-material/KeyboardArrowUp'
 import KeyboardArrowDownIcon        from '@mui/icons-material/KeyboardArrowDown'
 import KeyboardDoubleArrowDownIcon  from '@mui/icons-material/KeyboardDoubleArrowDown'
-import type { PanelWidget, LayoutItem, BoxAnimation } from '@/types/panel'
+import type { PanelWidget, LayoutItem, BoxAnimation, TextShadowStyle } from '@/types/panel'
 import type { HardwareSnapshot, SensorReading } from '@/types/sensors'
 import { SensorPickerDialog }   from '@/components/SensorPickerDialog'
 import { boxEffectSupportsRandom } from '@/components/widgets/boxEffects'
@@ -207,6 +207,7 @@ function TextStyleSection({
   title, color, fontSize, bold, fontFamily, italic, fontOptions,
   visible, onVisibleChange,
   onColorChange, onFontSizeChange, onBoldChange, onFontFamilyChange, onItalicChange,
+  shadow, onShadowChange,
 }: {
   title: string
   color: string
@@ -222,8 +223,31 @@ function TextStyleSection({
   onBoldChange: (b: boolean) => void
   onFontFamilyChange: (f: string) => void
   onItalicChange: (i: boolean) => void
+  shadow?: TextShadowStyle
+  onShadowChange?: (s: TextShadowStyle) => void
 }) {
   const { t } = useTranslation()
+
+  /** Small labeled slider row for the shadow parameters. */
+  const ShadowSlider = ({ label, value, min, max, onChange }: {
+    label: string; value: number; min: number; max: number
+    onChange: (v: number) => void
+  }) => (
+    <Box>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+        <Typography variant="caption" sx={{ color: 'text.secondary' }}>{label}</Typography>
+        <Typography variant="caption" sx={{ color: 'text.disabled' }}>{Math.round(value)}</Typography>
+      </Box>
+      <Slider
+        size="small"
+        min={min}
+        max={max}
+        value={value}
+        onChange={(_, v) => onChange(Number(v))}
+        sx={{ '& .MuiSlider-thumb': { width: 14, height: 14 } }}
+      />
+    </Box>
+  )
   return (
     <Box>
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
@@ -296,6 +320,57 @@ function TextStyleSection({
             <li {...props} style={{ fontFamily: option, fontSize: '0.82rem' }}>{option}</li>
           )}
         />
+        {onShadowChange && (
+          <Box sx={{ mt: 0.5 }}>
+            <FormControlLabel
+              sx={{ mr: 0, ml: 0 }}
+              control={
+                <Switch
+                  size="small"
+                  checked={shadow?.enabled ?? false}
+                  onChange={e => onShadowChange({ ...(shadow ?? {}), enabled: e.target.checked })}
+                />
+              }
+              label={<Typography variant="body2">{t('widgetProperties.textShadow')}</Typography>}
+            />
+            {shadow?.enabled && (
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, pl: 1, borderLeft: '2px solid rgba(255,255,255,0.08)' }}>
+                <ColorSwatchesPicker
+                  value={shadow.color ?? '#000000'}
+                  onChange={c => onShadowChange({ ...shadow, color: c })}
+                />
+                <ShadowSlider
+                  label={t('widgetProperties.shadowStrength')}
+                  value={shadow.opacity ?? 100}
+                  min={0}
+                  max={100}
+                  onChange={v => onShadowChange({ ...shadow, opacity: v })}
+                />
+                <ShadowSlider
+                  label={t('widgetProperties.shadowBlur')}
+                  value={shadow.blur ?? 8}
+                  min={0}
+                  max={40}
+                  onChange={v => onShadowChange({ ...shadow, blur: v })}
+                />
+                <ShadowSlider
+                  label={t('widgetProperties.shadowDistance')}
+                  value={shadow.distance ?? 4}
+                  min={0}
+                  max={20}
+                  onChange={v => onShadowChange({ ...shadow, distance: v })}
+                />
+                <ShadowSlider
+                  label={t('widgetProperties.shadowAngle')}
+                  value={shadow.angle ?? 45}
+                  min={0}
+                  max={360}
+                  onChange={v => onShadowChange({ ...shadow, angle: v })}
+                />
+              </Box>
+            )}
+          </Box>
+        )}
       </Box>
       )}
     </Box>
@@ -891,6 +966,8 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
                 onBoldChange={b => onUpdate({ timeBold: b })}
                 onFontFamilyChange={f => onUpdate({ fontFamily: f || undefined })}
                 onItalicChange={i => onUpdate({ italic: i })}
+                shadow={widget.timeShadow}
+                onShadowChange={s => onUpdate({ timeShadow: s })}
               />
             </Box>
           )}
@@ -936,6 +1013,8 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
                 onBoldChange={b => onUpdate({ dateBold: b })}
                 onFontFamilyChange={f => onUpdate({ dateFontFamily: f || undefined })}
                 onItalicChange={i => onUpdate({ dateItalic: i })}
+                shadow={widget.dateShadow}
+                onShadowChange={s => onUpdate({ dateShadow: s })}
               />
             </Box>
           )}
@@ -1056,6 +1135,8 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
             onBoldChange={b => onUpdate({ labelBold: b })}
             onFontFamilyChange={f => onUpdate({ labelFontFamily: f || undefined })}
             onItalicChange={i => onUpdate({ labelItalic: i })}
+            shadow={widget.labelShadow}
+            onShadowChange={s => onUpdate({ labelShadow: s })}
           />
           <Divider />
           <TextStyleSection
@@ -1073,6 +1154,8 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
             onBoldChange={b => onUpdate({ valueBold: b })}
             onFontFamilyChange={f => onUpdate({ valueFontFamily: f || undefined })}
             onItalicChange={i => onUpdate({ valueItalic: i })}
+            shadow={widget.valueShadow}
+            onShadowChange={s => onUpdate({ valueShadow: s })}
           />
           {widget.type === 'SensorGauge' && (widget.showValue ?? true) && (
             <FormControlLabel
@@ -1103,6 +1186,8 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
                 onBoldChange={b => onUpdate({ unitBold: b })}
                 onFontFamilyChange={f => onUpdate({ unitFontFamily: f || undefined })}
                 onItalicChange={i => onUpdate({ unitItalic: i })}
+                shadow={widget.unitShadow}
+                onShadowChange={s => onUpdate({ unitShadow: s })}
               />
             </>
           )}
@@ -1552,6 +1637,8 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
             onBoldChange={b => onUpdate({ labelBold: b })}
             onFontFamilyChange={f => onUpdate({ labelFontFamily: f || undefined })}
             onItalicChange={i => onUpdate({ labelItalic: i })}
+            shadow={widget.labelShadow}
+            onShadowChange={s => onUpdate({ labelShadow: s })}
           />
           <Divider sx={{ my: 0.5 }} />
           <TextStyleSection
@@ -1567,6 +1654,8 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
             onBoldChange={b => onUpdate({ valueBold: b })}
             onFontFamilyChange={f => onUpdate({ valueFontFamily: f || undefined })}
             onItalicChange={i => onUpdate({ valueItalic: i })}
+            shadow={widget.valueShadow}
+            onShadowChange={s => onUpdate({ valueShadow: s })}
           />
         </Box>
       )}

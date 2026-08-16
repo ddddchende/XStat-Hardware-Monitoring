@@ -2,6 +2,7 @@ import React from 'react'
 import { Box, Typography } from '@mui/material'
 import type { PanelWidget } from '@/types/panel'
 import type { HardwareSnapshot } from '@/types/sensors'
+import { textShadowCss } from '@/utils/textShadow'
 
 /** Convert polar angle (degrees, 0=top, clockwise) to SVG cartesian */
 function polarToXY(cx: number, cy: number, r: number, deg: number): [number, number] {
@@ -53,6 +54,9 @@ export const SensorGaugeWidget: React.FC<Props> = ({ widget, snapshot }) => {
   const showValue        = widget.showValue ?? true
   const showUnit         = widget.showUnit  ?? true
   const showAccent       = widget.showAccent ?? true
+  const labelShadow = textShadowCss(widget.labelShadow)
+  const valueShadow = textShadowCss(widget.valueShadow)
+  const unitShadow  = textShadowCss(widget.unitShadow)
 
   // Geometry per variant
   const r = 34, sw = 7
@@ -135,6 +139,7 @@ export const SensorGaugeWidget: React.FC<Props> = ({ widget, snapshot }) => {
               fontWeight={valueBold ? 'bold' : 'normal'}
               fontStyle={valueItalic ? 'italic' : 'normal'}
               fontFamily={valueFontFamily ?? 'Inter, system-ui, sans-serif'}
+              style={{ textShadow: valueShadow }}
             >
               {displayValue}
             </tspan>
@@ -146,6 +151,7 @@ export const SensorGaugeWidget: React.FC<Props> = ({ widget, snapshot }) => {
               fontWeight={unitBold ? 'bold' : 'normal'}
               fontStyle={unitItalic ? 'italic' : 'normal'}
               fontFamily={unitFontFamily ?? 'Inter, system-ui, sans-serif'}
+              style={{ textShadow: unitShadow }}
             >
               {displayUnit}
             </tspan>
@@ -165,6 +171,7 @@ export const SensorGaugeWidget: React.FC<Props> = ({ widget, snapshot }) => {
           pb: 0.5, userSelect: 'none',
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           maxWidth: '100%',
+          textShadow: labelShadow,
         }}
       >
         {label}

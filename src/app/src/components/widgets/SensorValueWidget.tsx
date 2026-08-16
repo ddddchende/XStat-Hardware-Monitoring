@@ -3,6 +3,7 @@ import { Box, Typography } from '@mui/material'
 import type { PanelWidget } from '@/types/panel'
 import type { HardwareSnapshot } from '@/types/sensors'
 import { autoThroughput, isMbpsUnit } from '@/utils/formatThroughput'
+import { textShadowCss } from '@/utils/textShadow'
 
 interface Props {
   widget: PanelWidget
@@ -18,7 +19,7 @@ export const SensorValueWidget: React.FC<Props> = ({ widget, snapshot }) => {
     ? (useAutoThroughput ? autoThroughput(sensor.value).value : sensor.value.toFixed(1))
     : '—'
   const displayUnit  = useAutoThroughput
-    ? autoThroughput(sensor.value).unit
+    ? autoThroughput(sensor?.value).unit
     : (widget.unit ?? sensor?.unit ?? '')
   const displayLabel = widget.label ?? sensor?.name  ?? 'No sensor'
   const color            = widget.color            ?? '#03dac6'
@@ -39,6 +40,9 @@ export const SensorValueWidget: React.FC<Props> = ({ widget, snapshot }) => {
   const showLabel        = widget.showLabel        ?? true
   const showValue        = widget.showValue        ?? true
   const showUnit         = widget.showUnit         ?? true
+  const labelShadow      = textShadowCss(widget.labelShadow)
+  const valueShadow      = textShadowCss(widget.valueShadow)
+  const unitShadow       = textShadowCss(widget.unitShadow)
 
   return (
     <Box
@@ -59,6 +63,7 @@ export const SensorValueWidget: React.FC<Props> = ({ widget, snapshot }) => {
           textTransform: 'uppercase', letterSpacing: '0.1em',
           lineHeight: 1, userSelect: 'none', whiteSpace: 'nowrap',
           overflow: 'hidden', textOverflow: 'ellipsis', width: '100%',
+          textShadow: labelShadow,
         }}
       >
         {displayLabel}
@@ -72,6 +77,7 @@ export const SensorValueWidget: React.FC<Props> = ({ widget, snapshot }) => {
             fontStyle: valueItalic ? 'italic' : 'normal',
             fontFamily: valueFontFamily,
             fontVariantNumeric: 'tabular-nums', userSelect: 'none',
+            textShadow: valueShadow,
           }}
         >
           {displayValue}
@@ -84,6 +90,7 @@ export const SensorValueWidget: React.FC<Props> = ({ widget, snapshot }) => {
               fontStyle: unitItalic ? 'italic' : 'normal',
               fontFamily: unitFontFamily,
               userSelect: 'none',
+              textShadow: unitShadow,
             }}
           >
             {displayUnit}

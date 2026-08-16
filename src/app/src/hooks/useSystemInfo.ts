@@ -11,8 +11,10 @@ export interface UseSystemInfoResult {
 
 /**
  * Fetches static system info (CPU/GPU model, RAM, disks, OS). Cached in-module
- * so multiple SystemInfo widgets share one fetch. Refreshed manually or every
- * 60s (in case hot-plug / dock changes things).
+ * so multiple SystemInfo widgets share one fetch. Re-fetched every 5s so the
+ * Uptime value stays calibrated against the service's live WMI data (the widget
+ * ticks locally by +1s between refreshes). Refresh failures keep showing the
+ * last-known data instead of blanking the widget.
  */
 let _cache: SystemInfo | null = null
 let _fetching: Promise<SystemInfo | null> | null = null
@@ -27,32 +29,36 @@ export function useSystemInfo(): UseSystemInfoResult {
     let cancelled = false
 
     async function load() {
-      setLoading(true)
-      setError(null)
+      if (cancelled) return
       try {
-        if (!_cache) {
-          if (!_fetching) {
-            _fetching = getServiceBase()
-              .then(base => fetch(`${base}/api/systeminfo`, { cache: 'no-cache' }))
-              .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() as Promise<SystemInfo> })
-              .then(d => { _cache = d; return d })
-              .catch(e => { _fetching = null; throw e })
-          }
-          const data = await _fetching
-          _fetching = null
-          if (cancelled) return
-          setInfo(data)
+        if (!_fetching) {
+          _fetching = getServiceBase()
+            .then(base => fetch(`${base}/api/systeminfo`, { cache: 'no-cache' }))
+            .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() as Promise<SystemInfo> })
+            .then(d => { _cache = d; return d })
+            .catch(e => { _fetching = null; throw e })
         }
+        const data = await _fetching
+        _fetching = null
+        if (cancelled) return
+        setInfo(data)
+        setError(null)
       } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : String(err))
+        _fetching = null
+        if (cancelled) return
+        // Keep showing last-known data on refresh failures; only surface errors
+        // when nothing has loaded successfully yet.
+        if (!_cache) setError(err instanceof Error ? err.message : String(err))
       } finally {
-        if (!cancelled) setLoading(false)
+        if (!cancelled && !_cache) setLoading(false)
       }
     }
 
     load()
-    // Refresh every 60s in case of hot-plug (rare; info is mostly static).
-    const id = setInterval(load, 60_000)
+    // Re-fetch every 3s: keeps Uptime calibrated (service computes it live via
+    // WMI LastBootUpTime) and catches hot-plug / dock changes. Static info is
+    // cheap to query, so the short interval is fine.
+    const id = setInterval(load, 3_000)
     return () => { cancelled = true; clearInterval(id) }
   }, [tick])
 

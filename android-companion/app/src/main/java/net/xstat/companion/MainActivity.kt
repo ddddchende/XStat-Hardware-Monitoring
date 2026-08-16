@@ -2,12 +2,15 @@ package net.xstat.companion
 
 import android.annotation.SuppressLint
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.KeyEvent
 import android.view.View
 import android.view.WindowManager
+import android.webkit.CookieManager
+import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -136,6 +139,9 @@ class MainActivity : AppCompatActivity() {
         if (url != null && !monitorRunning.get()) {
             startConnectionMonitor(url)
         }
+        // Note: do NOT reload here. The QQ OAuth callback arrives via
+        // onNewIntent() and is loaded directly; a reload on resume would wipe
+        // the just-loaded callback page before its JS could set the session.
     }
 
     /** Transient hint explaining how to reach Settings — at most [MAX_HINT_SHOWS] times ever. */
@@ -206,7 +212,11 @@ class MainActivity : AppCompatActivity() {
             conn.requestMethod  = "GET"
             val code = conn.responseCode
             conn.disconnect()
-            code in 200..299
+            // Host is reachable when we get any HTTP answer. 401/403 mean the
+            // reverse proxy demands auth (e.g. a login page) — the host is still
+            // up, so those must NOT count as a failure, otherwise the health
+            // monitor would restart the app while the user is on the auth page.
+            code in 200..299 || code == 401 || code == 403
         } catch (_: Exception) {
             false
         }
@@ -220,7 +230,19 @@ class MainActivity : AppCompatActivity() {
     // ── WebView ─────────────────────────────────────────────────────────────
 
     @SuppressLint("SetJavaScriptEnabled")
+    @Suppress("DEPRECATION")
     private fun configureWebView() {
+        // Older Android WebViews reject third-party cookies by default, which can
+        // break cross-domain auth flows. Explicitly allow them (no-op on Android 12+).
+        val cookieManager = CookieManager.getInstance()
+        cookieManager.setAcceptCookie(true)
+        cookieManager.setAcceptThirdPartyCookies(webView, true)
+
+        // Strip the WebView "; wv" / "Version/4.0" markers so the UA looks like a
+        // normal mobile Chrome (keeps the mobile layout, avoids WebView sniffing).
+        val rawUa = webView.settings.userAgentString
+        webView.settings.userAgentString = rawUa.replace("; wv", "").replace("Version/4.0 ", "")
+
         with(webView.settings) {
             javaScriptEnabled        = true
             domStorageEnabled        = true
@@ -230,6 +252,10 @@ class MainActivity : AppCompatActivity() {
             cacheMode                = WebSettings.LOAD_DEFAULT
             mediaPlaybackRequiresUserGesture = false
             allowContentAccess       = true
+            // Lucky OAuth opens the QQ auth page via window.open; without
+            // multiple-window support the popup is blocked → about:blank#blocked.
+            setSupportMultipleWindows(true)
+            javaScriptCanOpenWindowsAutomatically = true
         }
 
         webView.webViewClient = object : WebViewClient() {
@@ -243,7 +269,41 @@ class MainActivity : AppCompatActivity() {
                 description: String,
                 failingUrl: String
             ) {
+                // Never surface unknown-scheme navigations as a fatal error page.
+                if (errorCode == WebViewClient.ERROR_UNSUPPORTED_SCHEME) return
                 showError(getString(R.string.error_load_failed, description))
+            }
+        }
+
+        // Support window.open: create a hidden popup WebView to satisfy Lucky's
+        // "pre-open window" call, then when Lucky sets popup.location.href =
+        // authUrl, intercept that navigation and open the QQ auth page in the
+        // system browser. The main WebView keeps the login page polling OAuth.
+        webView.webChromeClient = object : WebChromeClient() {
+            override fun onCreateWindow(
+                view: WebView,
+                isDialog: Boolean,
+                isUserGesture: Boolean,
+                resultMsg: android.os.Message
+            ): Boolean {
+                val popup = WebView(view.context)
+                popup.settings.javaScriptEnabled = true
+                popup.webViewClient = object : WebViewClient() {
+                    override fun shouldOverrideUrlLoading(v: WebView, request: WebResourceRequest): Boolean {
+                        val url = request.url.toString()
+                        if (url.startsWith("http://") || url.startsWith("https://")) {
+                            try {
+                                view.context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                            } catch (_: Exception) {}
+                            return true
+                        }
+                        return false
+                    }
+                }
+                val transport = resultMsg.obj as? WebView.WebViewTransport ?: return false
+                transport.webView = popup
+                resultMsg.sendToTarget()
+                return true
             }
         }
     }

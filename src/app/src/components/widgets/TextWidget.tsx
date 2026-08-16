@@ -2,6 +2,7 @@ import React from 'react'
 import { Box, Typography } from '@mui/material'
 import { useTranslation } from 'react-i18next'
 import type { PanelWidget } from '@/types/panel'
+import { textShadowCss } from '@/utils/textShadow'
 
 interface Props {
   widget: PanelWidget
@@ -16,6 +17,7 @@ export const TextWidget: React.FC<Props> = ({ widget }) => {
   const fontSize   = widget.fontSize ?? 14
   const fontFamily = widget.fontFamily ?? undefined
   const italic     = widget.italic ?? false
+  const textShadow = textShadowCss(widget.textShadow)
 
   return (
     <Box
@@ -35,6 +37,7 @@ export const TextWidget: React.FC<Props> = ({ widget }) => {
           wordBreak: 'break-word',
           userSelect: 'none',
           lineHeight: 1.3,
+          textShadow,
         }}
       >
         {text}

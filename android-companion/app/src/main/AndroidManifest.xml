@@ -30,7 +30,7 @@
         <activity
             android:name=".SplashActivity"
             android:exported="true"
-            android:screenOrientation="sensor"
+            android:screenOrientation="unspecified"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize"
             android:theme="@style/Theme.XStatCompanion.Splash">
             <intent-filter>
@@ -45,21 +45,21 @@
         <activity
             android:name=".ChooserActivity"
             android:exported="false"
-            android:screenOrientation="sensor"
+            android:screenOrientation="unspecified"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize" />
 
         <!-- Settings -->
         <activity
             android:name=".SettingsActivity"
             android:exported="false"
-            android:screenOrientation="sensor"
+            android:screenOrientation="unspecified"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize" />
 
         <!-- Main WebView activity -->
         <activity
             android:name=".MainActivity"
             android:exported="false"
-            android:screenOrientation="sensor"
+            android:screenOrientation="unspecified"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize" />
 
     </application>

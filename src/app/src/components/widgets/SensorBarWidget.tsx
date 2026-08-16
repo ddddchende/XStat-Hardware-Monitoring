@@ -2,6 +2,7 @@ import React from 'react'
 import { Box, Typography } from '@mui/material'
 import type { PanelWidget } from '@/types/panel'
 import type { HardwareSnapshot } from '@/types/sensors'
+import { textShadowCss } from '@/utils/textShadow'
 
 interface Props {
   widget: PanelWidget
@@ -33,6 +34,8 @@ export const SensorBarWidget: React.FC<Props> = ({ widget, snapshot }) => {
   const showLabel = widget.showLabel ?? true
   const showValue = widget.showValue ?? true
   const showAccent = widget.showAccent ?? true
+  const labelShadow = textShadowCss(widget.labelShadow)
+  const valueShadow = textShadowCss(widget.valueShadow)
 
   // Variant-specific default thickness
   const defaultThickness = variant === 'rounded' ? 14 : variant === 'segmented' ? 10 : 6
@@ -101,6 +104,7 @@ export const SensorBarWidget: React.FC<Props> = ({ widget, snapshot }) => {
             fontFamily: labelFontFamily,
             userSelect: 'none',
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1,
+            textShadow: labelShadow,
           }}
         >
           {label}
@@ -114,6 +118,7 @@ export const SensorBarWidget: React.FC<Props> = ({ widget, snapshot }) => {
             fontFamily: valueFontFamily,
             userSelect: 'none', flexShrink: 0,
             fontVariantNumeric: 'tabular-nums',
+            textShadow: valueShadow,
           }}
         >
           {displayValue}

@@ -26,6 +26,19 @@ export type BoxAnimation =
   | 'scan'      // scanline stripe pattern
   | 'cyan'      // cyan rain + scanline grain
 
+/**
+ * Text shadow style, edited per text element in the widget properties panel.
+ * angle 0° = shadow offset to the right; 90° = downward; 180° = left; 270° = up.
+ */
+export interface TextShadowStyle {
+  enabled?: boolean
+  color?: string      // shadow color (default black)
+  opacity?: number    // strength 0..100
+  blur?: number       // blur radius px 0..40
+  distance?: number   // offset length px 0..20
+  angle?: number      // shadow direction degrees 0..360
+}
+
 export interface PanelWidget {
   id: string
   type: WidgetType
@@ -60,6 +73,13 @@ export interface PanelWidget {
   // Clock / Text global font
   fontFamily?: string
   italic?: boolean
+  // Text shadow (per text element, see TextStyleSection in WidgetProperties)
+  textShadow?: TextShadowStyle           // generic (Text widget etc.)
+  valueShadow?: TextShadowStyle
+  labelShadow?: TextShadowStyle
+  unitShadow?: TextShadowStyle
+  timeShadow?: TextShadowStyle           // Clock time
+  dateShadow?: TextShadowStyle           // Clock date
   // Range (Bar + Gauge + Sparkline)
   min?: number
   max?: number

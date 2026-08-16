@@ -4,6 +4,7 @@ import { AreaChart, Area, BarChart, Bar, YAxis } from 'recharts'
 import type { PanelWidget } from '@/types/panel'
 import type { HardwareSnapshot } from '@/types/sensors'
 import type { HistoryPoint } from '@/hooks/useSensorHistory'
+import { textShadowCss } from '@/utils/textShadow'
 
 interface Props {
   widget: PanelWidget
@@ -34,6 +35,8 @@ export const SensorSparklineWidget: React.FC<Props> = ({ widget, snapshot, histo
   const showValue = widget.showValue ?? true
   const showAccent = widget.showAccent ?? true
   const effectiveAccent = showAccent ? accentColor : 'transparent'
+  const labelShadow = textShadowCss(widget.labelShadow)
+  const valueShadow = textShadowCss(widget.valueShadow)
   // Auto-scale: Y axis follows the data. Turn it off to fix the range with min/max.
   const autoScale = widget.autoScale ?? true
   const rangeDomain: [number, number] = [widget.min ?? 0, widget.max ?? 100]
@@ -85,6 +88,7 @@ export const SensorSparklineWidget: React.FC<Props> = ({ widget, snapshot, histo
             fontFamily: labelFontFamily,
             userSelect: 'none', overflow: 'hidden',
             textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1,
+            textShadow: labelShadow,
           }}
         >
           {label}
@@ -98,6 +102,7 @@ export const SensorSparklineWidget: React.FC<Props> = ({ widget, snapshot, histo
             fontFamily: valueFontFamily,
             userSelect: 'none', ml: 1, flexShrink: 0,
             fontVariantNumeric: 'tabular-nums',
+            textShadow: valueShadow,
           }}
         >
           {currentValue}
