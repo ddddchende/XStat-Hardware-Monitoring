@@ -94,8 +94,8 @@ export const CUSTOM_DEFAULT_HTML = `<!DOCTYPE html>
   </script>
 </body></html>`
 
-/** Push layout to the service, retrying a few times on failure (handles startup race). */
-export async function pushLayoutToService(layout: PanelLayout, retries = 5): Promise<void> {
+/** Push the whole workspace to the service, retrying a few times on failure (handles startup race). */
+export async function pushLayoutToService(layout: PanelLayout | PanelsState, retries = 5): Promise<void> {
   const base = await getServiceBase()
   for (let i = 0; i < retries; i++) {
     try {
@@ -237,12 +237,11 @@ export function usePanelLayout() {
   }))
   const state = undoState.present
 
-  // Persist on every state change, and push the active panel to the local service
-  // so the LAN web panel can display it.
+  // Persist on every state change, and push the whole workspace to the local
+  // service so the LAN web panel can show any panel (not just the active one).
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
-    const active = state.panels.find(p => p.id === state.activePanelId) ?? state.panels[0]
-    pushLayoutToService(active)
+    pushLayoutToService(state)
   }, [state])
 
   const activePanel =

@@ -17,17 +17,16 @@ const AppShell: React.FC = () => {
   const { snapshot, connected, error } = useSensors()
   useAppSettings() // apply persisted settings (poll interval etc.) to service on startup
 
-  // On every launch, re-push the last active panel so the LAN panel and
-  // Android companion show the correct layout without the user having to
-  // open the Panel Editor first.
+  // On every launch, re-push the last workspace so the LAN panel and Android
+  // companion have the latest panels without the user having to open the
+  // Panel Editor first.
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY)
       if (!raw) return
       const parsed = JSON.parse(raw) as PanelsState
       if (!Array.isArray(parsed.panels) || parsed.panels.length === 0) return
-      const active = parsed.panels.find(p => p.id === parsed.activePanelId) ?? parsed.panels[0]
-      pushLayoutToService(active)
+      pushLayoutToService(parsed)
     } catch { /* ignore parse errors */ }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 

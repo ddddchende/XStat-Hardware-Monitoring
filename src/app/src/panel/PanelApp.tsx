@@ -58,7 +58,7 @@ const GettingStarted: React.FC<{ loading: boolean }> = ({ loading }) => (
 )
 
 export const PanelApp: React.FC = () => {
-  const { snapshot, layoutJson, historySeed, setSubscription } = usePanelSensors()
+  const { snapshot, layoutJson, panels, switchPanel, historySeed, setSubscription } = usePanelSensors()
   const history = useSensorHistory(snapshot, historySeed)
   const hostRef  = useRef<HTMLDivElement>(null)
   const [fit, setFit] = useState(1)
@@ -73,6 +73,43 @@ export const PanelApp: React.FC = () => {
       return next
     })
   }, [])
+
+  // 连点 3 次（600ms 窗口）呼出面板切换器 —— 平时完全无 UI，保持沉浸。
+  // 注意：自定义控件是沙箱 iframe，其内部点击不冒泡到父页面；服务端在控件
+  // HTML 里注入 tapBridge 脚本，通过 postMessage 上报 __xstatTap，这里统一
+  // 计入连点统计，全屏控件上也能呼出切换器。
+  const [switcherOpen, setSwitcherOpen] = useState(false)
+  const tapTimesRef = useRef<number[]>([])
+  const switcherTimerRef = useRef<number | null>(null)
+  const closeSwitcher = useCallback(() => {
+    setSwitcherOpen(false)
+    tapTimesRef.current = []          // 关闭时清空计数，防止关闭点击被计入下次连点
+    if (switcherTimerRef.current !== null) window.clearTimeout(switcherTimerRef.current)
+  }, [])
+  const registerTap = useCallback(() => {
+    if (panels.length < 2) return
+    const now = Date.now()
+    const recent = [...tapTimesRef.current.filter(t => now - t < 600), now]
+    tapTimesRef.current = recent
+    if (recent.length < 3) return
+    tapTimesRef.current = []
+    setSwitcherOpen(true)
+    if (switcherTimerRef.current !== null) window.clearTimeout(switcherTimerRef.current)
+    switcherTimerRef.current = window.setTimeout(() => closeSwitcher(), 6000)
+  }, [panels.length, setSwitcherOpen, closeSwitcher])
+  // 接收沙箱 iframe 内 tapBridge 上报的点击，与父页面点击走同一套连点逻辑。
+  useEffect(() => {
+    const onMessage = (e: MessageEvent) => {
+      if (e.data && e.data.__xstatTap) registerTap()
+    }
+    window.addEventListener('message', onMessage)
+    return () => window.removeEventListener('message', onMessage)
+  }, [registerTap])
+  const pickPanel = (id: string) => {
+    switchPanel(id)
+    closeSwitcher()
+  }
+  useEffect(() => () => closeSwitcher(), [closeSwitcher])
 
   const panel = useMemo<PanelLayout>(() => {
     if (!layoutJson) return EMPTY_PANEL
@@ -134,6 +171,7 @@ export const PanelApp: React.FC = () => {
   return (
     <div
       ref={hostRef}
+      onClick={registerTap}
       style={{
         position: 'fixed', inset: 0, overflow: 'hidden',
         background: panel.canvasBackground,
@@ -163,6 +201,47 @@ export const PanelApp: React.FC = () => {
           />
         </PanelSubscriptionContext.Provider>
       </div>
+
+      {/* Panel switcher — only appears after a triple-tap, auto-hides. */}
+      {switcherOpen && (
+        <div
+          onClick={(e) => { e.stopPropagation(); closeSwitcher() }}
+          style={{
+            position: 'fixed', inset: 0,
+            background: 'rgba(0,0,0,0.45)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 1000,
+          }}
+        >
+          <div onClick={e => e.stopPropagation()} style={{
+            minWidth: 200, maxWidth: '80vw',
+            background: 'rgba(20,20,24,0.92)',
+            border: '1px solid rgba(255,255,255,0.12)',
+            borderRadius: 14, padding: '8px',
+            boxShadow: '0 12px 40px rgba(0,0,0,0.5)',
+          }}>
+            {panels.map(p => (
+              <button
+                key={p.id}
+                onClick={() => pickPanel(p.id)}
+                style={{
+                  display: 'block', width: '100%', padding: '10px 14px',
+                  marginBottom: 4, border: 'none', borderRadius: 8,
+                  background: 'transparent', color: '#fff',
+                  fontFamily: 'Inter, system-ui, sans-serif', fontSize: 14,
+                  textAlign: 'left', cursor: 'pointer',
+                  outline: p.id === panel.id ? '1px solid rgba(255,255,255,0.35)' : 'none',
+                  opacity: p.id === panel.id ? 1 : 0.7,
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)' }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+              >
+                {p.name || p.id}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -20,26 +20,72 @@ public sealed class PanelLayoutController : ControllerBase
     }
 
     /// <summary>
-    /// GET /api/panel-layout — returns the current layout JSON, or 204 when none has been pushed yet.
+    /// GET /api/panel-layout — returns the whole workspace ({panels, activePanelId}),
+    /// or 204 when nothing has been pushed yet. Legacy single-panel payloads are
+    /// wrapped into a workspace shape so clients can always rely on the same format.
     /// </summary>
     [HttpGet]
     public IActionResult Get()
     {
         var json = _store.GetLayoutJson();
         if (json is null) return NoContent();
-        return Content(json, "application/json");
+        return Content(NormalizeWorkspace(json), "application/json");
     }
 
     /// <summary>
-    /// PUT /api/panel-layout — stores the layout and pushes a LayoutUpdated event to all
-    /// connected SignalR clients so the LAN panel refreshes immediately.
+    /// GET /api/panel-layout/{panelId} — returns a single panel's layout, or 404
+    /// when the id is unknown. Lets the LAN panel switch between panels without
+    /// re-pushing anything from the editor.
+    /// </summary>
+    [HttpGet("{panelId}")]
+    public IActionResult GetPanel(string panelId)
+    {
+        var json = _store.GetLayoutJson();
+        if (json is null) return NoContent();
+        try
+        {
+            using var doc = JsonDocument.Parse(NormalizeWorkspace(json));
+            if (!doc.RootElement.TryGetProperty("panels", out var panels)) return NotFound();
+            foreach (var p in panels.EnumerateArray())
+            {
+                if (p.TryGetProperty("id", out var id) && id.ValueKind == JsonValueKind.String && id.GetString() == panelId)
+                    return Content(p.GetRawText(), "application/json");
+            }
+            return NotFound();
+        }
+        catch { return NotFound(); }
+    }
+
+    /// <summary>
+    /// PUT /api/panel-layout — stores the workspace (or a legacy single panel)
+    /// and pushes a LayoutUpdated event to all connected SignalR clients so the
+    /// LAN panel refreshes immediately.
     /// </summary>
     [HttpPut]
     public async Task<IActionResult> Put([FromBody] JsonElement body)
     {
         var json = body.GetRawText();
         _store.SetLayoutJson(json);
-        await _hub.Clients.All.SendAsync("LayoutUpdated", json);
+        await _hub.Clients.All.SendAsync("LayoutUpdated", NormalizeWorkspace(json));
         return NoContent();
+    }
+
+    /// <summary>Wrap a legacy single-panel payload into a workspace shape; workspace payloads pass through unchanged.</summary>
+    private static string NormalizeWorkspace(string json)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty("panels", out _)) return json;
+            var id = doc.RootElement.TryGetProperty("id", out var idEl) && idEl.ValueKind == JsonValueKind.String
+                ? idEl.GetString()
+                : "default";
+            return JsonSerializer.Serialize(new
+            {
+                panels = new[] { doc.RootElement.Clone() },
+                activePanelId = id,
+            });
+        }
+        catch { return json; }
     }
 }
