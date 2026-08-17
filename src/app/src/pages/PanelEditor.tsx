@@ -29,6 +29,7 @@ import { WidgetProperties }  from '@/components/WidgetProperties'
 import { CanvasProperties }  from '@/components/CanvasProperties'
 import { MultiSelectProperties } from '@/components/MultiSelectProperties'
 import { PanelCanvas }       from '@/components/PanelCanvas'
+import type { PanelCanvasHandle } from '@/components/PanelCanvas'
 import type { HardwareSnapshot } from '@/types/sensors'
 import type { WidgetType, PanelWidget, PanelLayout, LayoutItem } from '@/types/panel'
 
@@ -97,6 +98,7 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
     setDirty(true)
   }, [panels, activePanel.id])
   const canvasWrapperRef  = useRef<HTMLDivElement>(null)
+  const panelCanvasRef    = useRef<PanelCanvasHandle>(null)
   const zoomRef           = useRef(zoom)
   const panXRef           = useRef(panX)
   const panYRef           = useRef(panY)
@@ -200,7 +202,10 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
   // empty space around the panel), not just on the canvas itself.
   const handleCanvasAreaMouseDown = useCallback((e: React.MouseEvent) => {
     if (e.button === 1) { e.preventDefault(); handlePanStart(e) }
-  }, [handlePanStart])
+    if (e.button === 0 && isEditMode && !canvasWrapperRef.current?.contains(e.target as Node)) {
+      panelCanvasRef.current?.startMarquee(e)
+    }
+  }, [handlePanStart, isEditMode])
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
     const wrapper = canvasWrapperRef.current
@@ -849,6 +854,7 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
             }}
           >
             <PanelCanvas
+              ref={panelCanvasRef}
               panel={activePanel}
               snapshot={snapshot}
               history={history}

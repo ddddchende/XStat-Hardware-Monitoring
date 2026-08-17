@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useMemo } from 'react'
+import React, { useRef, useEffect, useMemo, useImperativeHandle } from 'react'
 import { Box, alpha, useTheme } from '@mui/material'
 import type { PanelLayout, LayoutItem } from '@/types/panel'
 import type { HardwareSnapshot } from '@/types/sensors'
@@ -27,7 +27,7 @@ const HANDLES: DragHandle[] = [
 interface GroupMember { id: string; x: number; y: number; w: number; h: number }
 
 interface ActiveOp {
-  kind: 'move' | 'resize'
+  kind: 'move' | 'resize' | 'marquee'
   id: string
   dir?: Dir
   mx0: number; my0: number
@@ -37,6 +37,10 @@ interface ActiveOp {
   group?: GroupMember[]
   // Final positions per widget id, filled in while dragging.
   final?: Map<string, { x: number; y: number }>
+  // Marquee (box) selection: ox/oy hold the start point in canvas space;
+  // additive = Ctrl/Cmd held → toggle hits against initialSelection.
+  additive?: boolean
+  initialSelection?: string[]
 }
 
 interface GeomUpdate { id: string; geom: Partial<Omit<LayoutItem, 'i'>> }
@@ -152,7 +156,11 @@ interface Props {
   locked?: boolean
 }
 
-export const PanelCanvas: React.FC<Props> = ({
+export interface PanelCanvasHandle {
+  startMarquee: (e: React.MouseEvent) => void
+}
+
+export const PanelCanvas = React.forwardRef<PanelCanvasHandle, Props>(({
   panel,
   snapshot,
   history,
@@ -167,7 +175,7 @@ export const PanelCanvas: React.FC<Props> = ({
   onCanvasSelect,
   zoom,
   locked = false,
-}) => {
+}, ref) => {
   const theme = useTheme()
 
   // Stable refs so event listeners don't need to be re-attached on every render
@@ -181,12 +189,41 @@ export const PanelCanvas: React.FC<Props> = ({
   const hGuideRef = useRef<HTMLDivElement | null>(null)
   const groupFrameRef = useRef<HTMLDivElement | null>(null)
   const canvasSizeRef = useRef({ w: panel.canvasWidth, h: panel.canvasHeight })
+  const canvasRef        = useRef<HTMLDivElement | null>(null)
+  const marqueeRef       = useRef<HTMLDivElement | null>(null)
+  const selectRef        = useRef(onSelect)
+  const selectGroupRef   = useRef(onSelectGroup)
+  const canvasSelectRef  = useRef(onCanvasSelect)
+  const suppressClickRef = useRef(false)
+  const startMarquee = (e: React.MouseEvent) => {
+    const canvas = canvasRef.current
+    if (!canvas || e.button !== 0 || !isEditMode) return
+    const rect = canvas.getBoundingClientRect()
+    const z = zoomRef.current
+    const cx = (e.clientX - rect.left) / z
+    const cy = (e.clientY - rect.top) / z
+    e.preventDefault()
+    e.stopPropagation()
+    suppressClickRef.current = false
+    document.body.style.cursor = 'crosshair'
+    opRef.current = {
+      kind: 'marquee', id: '',
+      mx0: e.clientX, my0: e.clientY,
+      ox: cx, oy: cy, ow: 0, oh: 0,
+      additive: e.ctrlKey || e.metaKey,
+      initialSelection: [...selectedWidgetIds],
+    }
+  }
+  useImperativeHandle(ref, () => ({ startMarquee }), [selectedWidgetIds, isEditMode])
   useEffect(() => { layoutRef.current = panel.layout },   [panel.layout])
   useEffect(() => { geoRef.current    = onWidgetGeometries }, [onWidgetGeometries])
   useEffect(() => { snapRef.current   = snapToGrid },       [snapToGrid])
   useEffect(() => { alignRef.current  = smartAlign },       [smartAlign])
   useEffect(() => { zoomRef.current   = zoom ?? 1 },        [zoom])
   useEffect(() => { canvasSizeRef.current = { w: panel.canvasWidth, h: panel.canvasHeight } }, [panel.canvasWidth, panel.canvasHeight])
+  useEffect(() => { selectRef.current       = onSelect },        [onSelect])
+  useEffect(() => { selectGroupRef.current   = onSelectGroup },  [onSelectGroup])
+  useEffect(() => { canvasSelectRef.current  = onCanvasSelect }, [onCanvasSelect])
 
   // Pull fonts referenced by the panel from the service into this browser so
   // widgets render with the exact typeface the desktop user picked (esp. LAN
@@ -241,6 +278,29 @@ export const PanelCanvas: React.FC<Props> = ({
     function onMouseMove(e: MouseEvent) {
       const op = opRef.current
       if (!op) return
+
+      // ── Marquee (box) selection: update the drag rectangle in canvas space ──
+      if (op.kind === 'marquee') {
+        const canvas = canvasRef.current
+        if (!canvas) return
+        const rect = canvas.getBoundingClientRect()
+        const z = zoomRef.current
+        const curX = (e.clientX - rect.left) / z
+        const curY = (e.clientY - rect.top) / z
+        const left = Math.min(op.ox, curX)
+        const top = Math.min(op.oy, curY)
+        const w = Math.abs(curX - op.ox)
+        const h = Math.abs(curY - op.oy)
+        const box = marqueeRef.current
+        if (box) {
+          box.style.display = 'block'
+          box.style.left = `${left}px`
+          box.style.top = `${top}px`
+          box.style.width = `${w}px`
+          box.style.height = `${h}px`
+        }
+        return
+      }
 
       // Client-space deltas → canvas-space (the wrapper is CSS-scaled by zoom)
       const z = zoomRef.current
@@ -419,7 +479,7 @@ export const PanelCanvas: React.FC<Props> = ({
       setGeom(op.id, x, y, w, h)
     }
 
-    function onMouseUp() {
+    function onMouseUp(e: MouseEvent) {
       const op = opRef.current
       if (!op) return
       opRef.current = null
@@ -427,6 +487,39 @@ export const PanelCanvas: React.FC<Props> = ({
       // Hide smart alignment guides when the drag ends.
       if (vGuideRef.current) vGuideRef.current.style.display = 'none'
       if (hGuideRef.current) hGuideRef.current.style.display = 'none'
+
+      // ── Marquee: finalize the box selection ──
+      if (op.kind === 'marquee') {
+        if (marqueeRef.current) marqueeRef.current.style.display = 'none'
+        const moved = Math.abs(e.clientX - op.mx0) > 3 || Math.abs(e.clientY - op.my0) > 3
+        if (!moved) {
+          // A plain click on empty canvas clears the selection and selects the canvas.
+          selectRef.current(null, false)
+          canvasSelectRef.current?.()
+        } else if (canvasRef.current) {
+          const rect = canvasRef.current.getBoundingClientRect()
+          const z = zoomRef.current
+          const curX = (e.clientX - rect.left) / z
+          const curY = (e.clientY - rect.top) / z
+          const left = Math.min(op.ox, curX), top = Math.min(op.oy, curY)
+          const right = Math.max(op.ox, curX), bottom = Math.max(op.oy, curY)
+          // Widgets that intersect the drag rectangle (canvas-space).
+          const hits = layoutRef.current
+            .filter(l => l.x < right && l.x + l.w > left && l.y < bottom && l.y + l.h > top)
+            .map(l => l.i)
+          if (op.additive) {
+            // Ctrl/Cmd: toggle (inverse) each hit widget against the current selection.
+            const init = new Set(op.initialSelection ?? [])
+            for (const id of hits) { if (init.has(id)) init.delete(id); else init.add(id) }
+            selectGroupRef.current?.([...init])
+          } else {
+            selectGroupRef.current?.(hits)
+          }
+        }
+        // Suppress the synthetic click that follows so it doesn't clear the result.
+        suppressClickRef.current = true
+        return
+      }
 
       // Group move: commit every widget that was actually dragged (op.final is
       // only populated when mousemove fired, so a plain click commits nothing).
@@ -497,13 +590,24 @@ export const PanelCanvas: React.FC<Props> = ({
 
   return (
     <Box
-      onClick={e => { if (e.target === e.currentTarget) { onSelect(null, false); onCanvasSelect?.() } }}
+      ref={canvasRef}
+      onClick={e => {
+        if (suppressClickRef.current) { suppressClickRef.current = false; return }
+        if (e.target === e.currentTarget) { onSelect(null, false); onCanvasSelect?.() }
+      }}
       onMouseDown={e => {
+        suppressClickRef.current = false
         // Middle button: pan the canvas from anywhere (e.g. after zooming in).
         // stopPropagation so the editor's work-area handler doesn't fire twice.
         if (e.button === 1) { e.preventDefault(); e.stopPropagation(); onPanStart?.(e); return }
-        // Left button on empty canvas: pan too.
-        if (e.button === 0 && e.target === e.currentTarget) onPanStart?.(e)
+        // Left button on empty canvas.
+        if (e.button === 0 && e.target === e.currentTarget) {
+          if (isEditMode) {
+            startMarquee(e)
+          } else {
+            onPanStart?.(e)
+          }
+        }
       }}
       sx={{
         position: 'relative',
@@ -672,6 +776,21 @@ export const PanelCanvas: React.FC<Props> = ({
         )
       })()}
 
+      {/* Marquee (box) selection rectangle — drawn while dragging on empty canvas */}
+      {isEditMode && (
+        <Box
+          ref={marqueeRef}
+          sx={{
+            position: 'absolute',
+            display: 'none',
+            border: `1px solid ${theme.palette.primary.main}`,
+            backgroundColor: alpha(theme.palette.primary.main, 0.15),
+            pointerEvents: 'none',
+            zIndex: 40,
+          }}
+        />
+      )}
+
       {/* Smart alignment guides — shown while dragging to align with other widgets */}
       {isEditMode && (
         <Box sx={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 50 }}>
@@ -681,4 +800,6 @@ export const PanelCanvas: React.FC<Props> = ({
       )}
     </Box>
   )
-}
+})
+
+PanelCanvas.displayName = 'PanelCanvas'
