@@ -37,7 +37,7 @@
   "panelEditor.selectWidget": "选择组件",
   "panelEditor.sensors": "{{count}} 个传感器",
   "panelEditor.offline": "离线",
-  "panelEditor.exportPanel": "导出面 (.xstatpanel)",
+  "panelEditor.exportPanel": "导出面板 (.xstatpanel)",
   "panelEditor.importPanel": "导入面板",
   "panelEditor.openWorkspace": "打开工作区文件",
   "panelEditor.saveWorkspace": "保存 (Ctrl+S)",

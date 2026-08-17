@@ -8,6 +8,7 @@ import EditIcon            from '@mui/icons-material/Edit'
 import VisibilityIcon      from '@mui/icons-material/Visibility'
 import AddIcon             from '@mui/icons-material/Add'
 import FileDownloadIcon    from '@mui/icons-material/FileDownload'
+import FileUploadIcon      from '@mui/icons-material/FileUpload'
 import FolderOpenIcon      from '@mui/icons-material/FolderOpen'
 import SaveIcon            from '@mui/icons-material/Save'
 import ExpandMoreIcon      from '@mui/icons-material/ExpandMore'
@@ -47,6 +48,7 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
     groupWidgets, ungroupWidgets, duplicateGroup, exportGroup, importGroup,
     createPanel, deletePanel, renamePanel, setActivePanel,
     updateCanvasBackground, updateCanvasSettings,
+    exportPanel, importPanel,
     exportWorkspace, loadWorkspace,
     undo, canUndo,
     redo, canRedo,
@@ -455,6 +457,33 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
     if (ids.length) setSelectedWidgetIds(ids)
   }
 
+  function handleExportPanel() {
+    const data = exportPanel()
+    const blob = new Blob([data], { type: 'application/json' })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a')
+    a.href     = url
+    a.download = `${activePanel.name || 'panel'}.xstatpanel`
+    a.click()
+    URL.revokeObjectURL(url)
+    setPanelMenuAnchor(null)
+  }
+
+  function handleImportPanel() {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = '.xstatpanel,.json'
+    input.onchange = async () => {
+      const file = input.files?.[0]
+      if (!file) return
+      const text = await file.text()
+      if (importPanel(text)) {
+        setPanelMenuAnchor(null)
+      }
+    }
+    input.click()
+  }
+
   function startRename() {
     setRenameValue(activePanel.name)
     setRenamingPanel(true)
@@ -571,6 +600,13 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
           </MenuItem>
           <MenuItem onClick={startRename} sx={{ fontSize: '0.85rem' }}>
             <EditIcon fontSize="small" sx={{ mr: 1 }} /> {t('panelEditor.rename')}
+          </MenuItem>
+          <Divider />
+          <MenuItem onClick={handleExportPanel} sx={{ fontSize: '0.85rem' }}>
+            <FileUploadIcon fontSize="small" sx={{ mr: 1 }} /> {t('panelEditor.exportPanel')}
+          </MenuItem>
+          <MenuItem onClick={handleImportPanel} sx={{ fontSize: '0.85rem' }}>
+            <FileDownloadIcon fontSize="small" sx={{ mr: 1 }} /> {t('panelEditor.importPanel')}
           </MenuItem>
         </Menu>
 
