@@ -18,6 +18,11 @@
   <img src="https://img.shields.io/badge/Electron-33-47848f" alt="Electron 33">
 </p>
 
+> **注意事项**
+> 1. 首次使用前必须安装 `resources\pawnio\PawnIO-Setup.exe`（[下载地址](https://github.com/namazso/PawnIO/releases)），这是服务端读取硬件传感器的依赖组件。
+> 2. 若需从局域网其他设备（手机、平板）访问 Web 面板，请在 Windows 防火墙中放行 `9421` 端口（TCP），或临时关闭防火墙。
+> 3. 自带演示模板位于 `resources\workspace.xstatpanel`，可从编辑器中打开作为起点。
+
 ---
 
 ## 截图
