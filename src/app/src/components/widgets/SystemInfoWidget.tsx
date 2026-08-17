@@ -67,6 +67,10 @@ export const SystemInfoWidget: React.FC<Props> = ({ widget }) => {
   const disksToShow = widget.sysDisksToShow ?? []
   const diskFormat  = widget.sysDiskFormat  ?? 'model'
   const align       = widget.sysTextAlign   ?? 'left'
+  const removeTokens = (widget.sysRemoveTokens ?? '')
+    .split(/[,，]/)
+    .map(token => token.trim())
+    .filter(Boolean)
 
   // Uptime comes from the backend as a base value; tick it locally every second
   // so it stays live without re-polling the (rarely-refreshed) /api/systeminfo.
@@ -178,6 +182,13 @@ export const SystemInfoWidget: React.FC<Props> = ({ widget }) => {
         label: 'Disk',
         value: `${first.model} | ${type}${letters}`.trim(),
       })
+    }
+  }
+
+  if (removeTokens.length > 0) {
+    for (const row of rows) {
+      for (const token of removeTokens) row.value = row.value.split(token).join('')
+      row.value = row.value.replace(/\s{2,}/g, ' ').trim()
     }
   }
 

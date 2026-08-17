@@ -217,6 +217,9 @@
   "widgetProperties.sysDiskFormat": "Disk format",
   "widgetProperties.sysDiskFormatModel": "Model",
   "widgetProperties.sysDiskFormatName": "Letter & name",
+  "widgetProperties.sysRemoveTokens": "Text to remove",
+  "widgetProperties.sysRemoveTokensPlaceholder": "Example: (R),(TM)",
+  "widgetProperties.sysRemoveTokensHint": "Separate multiple tokens with commas; applies to system info values",
 
   "canvasProperties.canvas": "Canvas",
   "canvasProperties.grid": "Grid",

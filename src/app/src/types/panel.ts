@@ -167,6 +167,7 @@ export interface PanelWidget {
   sysDisksToShow?: string[]    // drive letters to display (empty = all)
   sysDiskFormat?: 'model' | 'name'  // disk row: "Model | Type (Letters)" vs "H: 资源" (letter + partition name)
   sysTextAlign?: 'left' | 'center' | 'right'  // row title + value alignment
+  sysRemoveTokens?: string
   // Layer ordering
   zIndex?: number
   // Element visibility toggles (sensor widgets)

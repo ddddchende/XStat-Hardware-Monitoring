@@ -1681,6 +1681,16 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
             </Box>
           )}
 
+          <TextField
+            size="small"
+            label={t('widgetProperties.sysRemoveTokens')}
+            value={widget.sysRemoveTokens ?? ''}
+            onChange={e => onUpdate({ sysRemoveTokens: e.target.value || undefined })}
+            placeholder={t('widgetProperties.sysRemoveTokensPlaceholder')}
+            helperText={t('widgetProperties.sysRemoveTokensHint')}
+            sx={{ mt: 0.5 }}
+          />
+
           <Divider sx={{ my: 0.5 }} />
           <TextStyleSection
             fontOptions={fontOptions}

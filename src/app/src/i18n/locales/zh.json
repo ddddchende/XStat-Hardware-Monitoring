@@ -217,6 +217,9 @@
   "widgetProperties.sysDiskFormat": "磁盘格式",
   "widgetProperties.sysDiskFormatModel": "型号",
   "widgetProperties.sysDiskFormatName": "盘符名称",
+  "widgetProperties.sysRemoveTokens": "移除文本",
+  "widgetProperties.sysRemoveTokensPlaceholder": "例如：(R),(TM)",
+  "widgetProperties.sysRemoveTokensHint": "多个文本用英文逗号分隔，应用于系统信息值",
 
   "canvasProperties.canvas": "画布",
   "canvasProperties.grid": "网格",
