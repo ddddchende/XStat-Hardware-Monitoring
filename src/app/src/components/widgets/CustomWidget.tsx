@@ -416,15 +416,19 @@ export const CustomWidget: React.FC<Props> = ({ widget, snapshot }) => {
   const [fontDataUrls, setFontDataUrls] = useState<Record<string, string> | null>(null)
   useEffect(() => {
     let cancelled = false
-    const names = extractFontNames(widget.customHtml ?? '')
+    const htmlNames = extractFontNames(widget.customHtml ?? '')
+    const propNames = extractCustomPropFonts(widget)
+    const names = [...new Set([...htmlNames, ...propNames])]
     if (names.length === 0) { setFontDataUrls({}); return }
     const result: Record<string, string> = {}
     Promise.all(names.map(async (n) => {
       const d = await fetchFontDataUrl(n)
       if (d && !cancelled) result[n] = d
-    })).then(() => { if (!cancelled) setFontDataUrls(result) })
+    })).then(() => {
+      if (!cancelled) setFontDataUrls(result)
+    })
     return () => { cancelled = true }
-  }, [widget.customHtml])
+  }, [widget.customHtml, widget.customProps])
 
   // Deliver fonts to the iframe after it loads (and again on rebuild / when data arrives).
   useEffect(() => {
@@ -498,6 +502,20 @@ function hashString(s: string): number {
 // page fetches them same-origin (no CORS), converts to data URLs and ships them
 // into the iframe via postMessage; the injected font bridge rewrites @font-face
 // src to the data URL, so no network request happens inside the iframe at all.
+
+/** Extract fontFamily values from customProps for textstyle-type custom props. */
+function extractCustomPropFonts(widget: PanelWidget): string[] {
+  const names = new Set<string>()
+  for (const p of extractPropSchema(widget.customHtml ?? '')) {
+    if (p.type !== 'textstyle') continue
+    const ts = widget.customProps?.[p.key]
+    if (ts && typeof ts === 'object' && 'fontFamily' in ts) {
+      const ff = (ts as CustomTextStyle).fontFamily
+      if (ff && ff.trim()) names.add(ff.trim())
+    }
+  }
+  return [...names]
+}
 
 /** Extract font family names referenced in a widget's HTML (api/fonts or encodeURIComponent patterns). */
 function extractFontNames(html: string): string[] {

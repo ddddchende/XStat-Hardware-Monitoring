@@ -1,4 +1,4 @@
-import type { PanelWidget } from '@/types/panel'
+import type { PanelWidget, CustomTextStyle } from '@/types/panel'
 import { getServiceBase } from '@/utils/getServiceBase'
 
 // ── Font transfer to remote browsers ──────────────────────────────────────────
@@ -15,8 +15,18 @@ import { getServiceBase } from '@/utils/getServiceBase'
 export function collectPanelFonts(widgets: PanelWidget[]): string[] {
   const set = new Set<string>()
   for (const w of widgets) {
+    // Built-in widget font props
     for (const f of [w.fontFamily, w.labelFontFamily, w.valueFontFamily, w.unitFontFamily]) {
       if (f && f.trim()) set.add(f.trim())
+    }
+    // Custom widget textstyle custom props
+    if (w.customProps) {
+      for (const v of Object.values(w.customProps)) {
+        if (v && typeof v === 'object' && 'fontFamily' in v) {
+          const ff = (v as CustomTextStyle).fontFamily
+          if (ff && ff.trim()) set.add(ff.trim())
+        }
+      }
     }
   }
   return [...set]
