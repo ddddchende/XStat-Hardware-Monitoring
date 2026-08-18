@@ -29,7 +29,7 @@ export const SensorBarWidget: React.FC<Props> = ({ widget, snapshot }) => {
   const valueItalic      = widget.valueItalic      ?? false
   const label            = widget.label ?? sensor?.name ?? 'No sensor'
   const displayValue = sensor?.value != null
-    ? `${value.toFixed(1)} ${widget.unit ?? sensor?.unit ?? ''}`.trim()
+    ? `${value.toFixed(widget.hideDecimals ? 0 : 1)} ${widget.unit ?? sensor?.unit ?? ''}`.trim()
     : '—'
   const showLabel = widget.showLabel ?? true
   const showValue = widget.showValue ?? true

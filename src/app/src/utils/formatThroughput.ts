@@ -9,14 +9,14 @@ export interface ThroughputDisplay {
 }
 
 /** Convert a Mbps value into an auto-unit byte-rate string pair. */
-export function autoThroughput(mbps: number | null | undefined): ThroughputDisplay {
+export function autoThroughput(mbps: number | null | undefined, hideDecimals = false): ThroughputDisplay {
   if (mbps == null) return { value: '—', unit: '' }
   if (mbps === 0) return { value: '0', unit: 'MB/s' }
   const abs = Math.abs(mbps)
   if (abs < 0.008) return { value: (mbps * 125000).toFixed(0), unit: 'B/s' }
-  if (abs < 8)     return { value: (mbps * 125).toFixed(1), unit: 'KB/s' }
-  if (abs < 8000)  return { value: (mbps / 8).toFixed(1), unit: 'MB/s' }
-  return { value: (mbps / 8000).toFixed(2), unit: 'GB/s' }
+  if (abs < 8)     return { value: (mbps * 125).toFixed(hideDecimals ? 0 : 1), unit: 'KB/s' }
+  if (abs < 8000)  return { value: (mbps / 8).toFixed(hideDecimals ? 0 : 1), unit: 'MB/s' }
+  return { value: (mbps / 8000).toFixed(hideDecimals ? 0 : 2), unit: 'GB/s' }
 }
 
 /** True when a sensor's unit is the Mbps throughput unit. */

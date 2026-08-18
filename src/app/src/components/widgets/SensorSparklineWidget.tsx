@@ -29,7 +29,7 @@ export const SensorSparklineWidget: React.FC<Props> = ({ widget, snapshot, histo
   const valueItalic      = widget.valueItalic      ?? false
   const label            = widget.label ?? sensor?.name ?? 'No sensor'
   const currentValue = sensor?.value != null
-    ? `${sensor.value.toFixed(1)} ${widget.unit ?? sensor?.unit ?? ''}`.trim()
+    ? `${sensor.value.toFixed(widget.hideDecimals ? 0 : 1)} ${widget.unit ?? sensor?.unit ?? ''}`.trim()
     : '—'
   const showLabel = widget.showLabel ?? true
   const showValue = widget.showValue ?? true

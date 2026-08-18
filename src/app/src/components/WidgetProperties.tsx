@@ -1202,7 +1202,7 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
             shadow={widget.valueShadow}
             onShadowChange={s => onUpdate({ valueShadow: s })}
           />
-          {widget.type === 'SensorGauge' && (widget.showValue ?? true) && (
+          {(['SensorValue', 'SensorBar', 'SensorGauge', 'SensorSparkline'].includes(widget.type)) && (widget.showValue ?? true) && (
             <FormControlLabel
               control={
                 <Switch size="small"
@@ -1741,6 +1741,15 @@ export const WidgetProperties: React.FC<Props> = ({ widget, layout, snapshot, al
               onUpdate({ fontSize: Number(value) })
             }
             sx={{ width: '100%', accentColor: 'primary.main', cursor: 'pointer' }}
+          />
+          <FormControlLabel
+            control={
+              <Switch size="small"
+                checked={widget.hideDecimals ?? false}
+                onChange={e => onUpdate({ hideDecimals: e.target.checked })}
+              />
+            }
+            label={<Typography variant="body2">{t('widgetProperties.hideDecimals')}</Typography>}
           />
           <Button
             size="small"

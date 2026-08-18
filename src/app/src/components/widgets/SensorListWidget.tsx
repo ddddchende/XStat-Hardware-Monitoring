@@ -64,8 +64,8 @@ export const SensorListWidget: React.FC<Props> = ({ widget, snapshot }) => {
               {list.map(s => {
                 // Network throughput (Mbps) shows as auto-unit byte rate (KB/s…).
                 const disp = isMbpsUnit(s.unit)
-                  ? autoThroughput(s.value)
-                  : { value: s.value != null ? s.value.toFixed(1) : '—', unit: s.unit }
+                  ? autoThroughput(s.value, widget.hideDecimals ?? false)
+                  : { value: s.value != null ? s.value.toFixed(widget.hideDecimals ? 0 : 1) : '—', unit: s.unit }
                 return (
                   <Box
                     key={s.id}
