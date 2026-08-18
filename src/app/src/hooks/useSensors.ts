@@ -15,6 +15,32 @@ export function useSensors() {
   // starting up (slow first hardware enumeration) when the renderer first
   // tries to connect, so keep retrying instead of failing forever.
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Throttle sensor snapshot updates when the window is not visible (minimized /
+  // hidden to tray). While hidden, snapshots are buffered and applied at most
+  // once every 10 seconds, significantly reducing React re-renders and CPU usage.
+  // When the window becomes visible again the latest snapshot is applied immediately.
+  const pendingSnapshotRef = useRef<HardwareSnapshot | null>(null)
+  const throttleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const throttledSetSnapshot = useCallback((data: HardwareSnapshot) => {
+    if (!document.hidden) {
+      // Window visible — apply immediately, cancel any pending throttle timer.
+      if (throttleTimerRef.current) { clearTimeout(throttleTimerRef.current); throttleTimerRef.current = null }
+      pendingSnapshotRef.current = null
+      setSnapshot(data)
+    } else {
+      // Window hidden — buffer latest snapshot, apply at most every 10 seconds.
+      pendingSnapshotRef.current = data
+      if (!throttleTimerRef.current) {
+        throttleTimerRef.current = setTimeout(() => {
+          throttleTimerRef.current = null
+          if (pendingSnapshotRef.current) {
+            setSnapshot(pendingSnapshotRef.current)
+            pendingSnapshotRef.current = null
+          }
+        }, 10_000)
+      }
+    }
+  }, [])
 
   const connect = useCallback(async () => {
     if (hubRef.current) return
@@ -44,7 +70,7 @@ export function useSensors() {
     }
 
     hub.on('SensorSnapshot', (data: HardwareSnapshot) => {
-      setSnapshot(data)
+      throttledSetSnapshot(data)
       setError(null)
     })
 
@@ -82,11 +108,25 @@ export function useSensors() {
     return () => {
       cleanedUpRef.current = true
       if (retryTimerRef.current) { clearTimeout(retryTimerRef.current); retryTimerRef.current = null }
+      if (throttleTimerRef.current) { clearTimeout(throttleTimerRef.current); throttleTimerRef.current = null }
       const h = hubRef.current
       hubRef.current = null
       h?.stop()
     }
   }, [connect])
+
+  // Flush buffered snapshot when the window becomes visible again.
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (!document.hidden && pendingSnapshotRef.current) {
+        if (throttleTimerRef.current) { clearTimeout(throttleTimerRef.current); throttleTimerRef.current = null }
+        setSnapshot(pendingSnapshotRef.current)
+        pendingSnapshotRef.current = null
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange)
+  }, [])
 
   return { snapshot, connected, error, reconnect: connect }
 }
