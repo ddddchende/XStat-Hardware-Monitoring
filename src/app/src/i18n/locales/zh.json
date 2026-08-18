@@ -44,6 +44,7 @@
   "panelEditor.saveWorkspaceAs": "另存为…",
   "panelEditor.untitled": "未命名",
   "panelEditor.resetZoom": "{{pct}}% — 重置",
+  "panelEditor.unsaved": "未保存",
   "panelEditor.widgetsSelected": "已选中 {{count}} 个控件",
   "panelEditor.multiSelectHint": "按住 Ctrl/Cmd 并点击控件，可一次选中多个。",
   "panelEditor.duplicateSelected": "复制所选控件",

@@ -844,6 +844,28 @@ export const PanelEditor: React.FC<PanelEditorProps> = ({ snapshot, connected, e
             </Box>
           )}
 
+          {/* Unsaved indicator — top-right */}
+          {dirty && (
+            <Box sx={{ position: 'absolute', top: 8, right: 8, zIndex: 100, pointerEvents: 'auto' }}>
+              <Chip
+                size="small"
+                icon={<SaveIcon sx={{ fontSize: 14 }} />}
+                label={t('panelEditor.unsaved')}
+                sx={{
+                  fontSize: '0.7rem', height: 24,
+                  background: alpha(theme.palette.warning.main, 0.2),
+                  color: 'warning.main',
+                  fontWeight: 700,
+                  animation: 'unsavedPulse 1.5s ease-in-out infinite',
+                  '@keyframes unsavedPulse': {
+                    '0%, 100%': { opacity: 0.65 },
+                    '50%': { opacity: 1 },
+                  },
+                }}
+              />
+            </Box>
+          )}
+
           {/* Canvas wrapper — transform driven entirely by useEffect above */}
           <Box
             ref={canvasWrapperRef}

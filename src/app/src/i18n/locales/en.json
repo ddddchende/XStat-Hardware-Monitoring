@@ -44,6 +44,7 @@
   "panelEditor.saveWorkspaceAs": "Save As…",
   "panelEditor.untitled": "Untitled",
   "panelEditor.resetZoom": "{{pct}}% — reset",
+  "panelEditor.unsaved": "Unsaved",
   "panelEditor.widgetsSelected": "{{count}} widgets selected",
   "panelEditor.multiSelectHint": "Hold Ctrl/Cmd and click widgets to select several at once.",
   "panelEditor.duplicateSelected": "Duplicate selected",
