@@ -57,6 +57,15 @@ builder.Services.AddCors(opts =>
     });
 });
 
+// HTTP response compression (gzip) for API responses and static files.
+builder.Services.AddResponseCompression(opts =>
+{
+    opts.EnableForHttps = true;
+    opts.Providers.Add<Microsoft.AspNetCore.ResponseCompression.GzipCompressionProvider>();
+    opts.MimeTypes = Microsoft.AspNetCore.ResponseCompression.ResponseCompressionDefaults
+        .MimeTypes.Concat(new[] { "application/json" });
+});
+
 builder.Services.AddControllers();
 
 // ─── Kestrel: listen on all interfaces so LAN panel access works ──────────────
@@ -67,6 +76,17 @@ builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 var app = builder.Build();
 
 app.UseCors();
+
+// /api/sensors is polled frequently (every poll interval) — skip compression
+// there to avoid the CPU cost of gzip on a hot, small payload. Setting
+// Content-Encoding: identity makes the compression middleware skip the response.
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.StartsWithSegments("/api/sensors"))
+        context.Response.Headers.ContentEncoding = "identity";
+    await next();
+});
+app.UseResponseCompression();
 app.UseDefaultFiles();
 app.UseStaticFiles(new StaticFileOptions
 {

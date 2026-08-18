@@ -125,7 +125,9 @@ export function useSensors() {
       }
     }
     document.addEventListener('visibilitychange', onVisibilityChange)
-    return () => document.removeEventListener('visibilitychange', onVisibilityChange)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
   }, [])
 
   return { snapshot, connected, error, reconnect: connect }

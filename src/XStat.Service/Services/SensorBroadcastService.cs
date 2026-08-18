@@ -23,6 +23,7 @@ public sealed class SensorBroadcastService(
     // Cached last snapshot for REST clients and the broadcaster.
     private volatile HardwareSnapshot? _lastSnapshot;
     public HardwareSnapshot? LastSnapshot => _lastSnapshot;
+    private readonly SemaphoreSlim _snapshotReady = new(0, 1);
 
     // Server-side history window: kept so a newly connected client (e.g. a phone
     // opening the LAN panel) receives the recent snapshots and can render charts
@@ -112,18 +113,20 @@ public sealed class SensorBroadcastService(
         // populated above, so it stays cheap regardless of how many disks are present.
         var collectTask = Task.Run(async () =>
         {
+            using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(_pollIntervalMs));
             while (!stoppingToken.IsCancellationRequested)
             {
                 try
                 {
                     _lastSnapshot = _monitor.GetSnapshot();
                     if (_lastSnapshot is not null) AppendHistory(_lastSnapshot);
+                    if (_snapshotReady.CurrentCount == 0) _snapshotReady.Release();
                 }
                 catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
                 {
                     _logger.LogWarning(ex, "Error collecting sensor data.");
                 }
-                await Task.Delay(_pollIntervalMs, stoppingToken).ConfigureAwait(false);
+                await timer.WaitForNextTickAsync(stoppingToken).ConfigureAwait(false);
             }
         }, stoppingToken);
 
@@ -135,6 +138,7 @@ public sealed class SensorBroadcastService(
         {
             while (!stoppingToken.IsCancellationRequested)
             {
+                await _snapshotReady.WaitAsync(stoppingToken).ConfigureAwait(false);
                 var snap = _lastSnapshot;
                 if (snap is not null)
                 {
@@ -158,7 +162,6 @@ public sealed class SensorBroadcastService(
                         _logger.LogWarning(ex, "Error broadcasting sensor data.");
                     }
                 }
-                await Task.Delay(_pollIntervalMs, stoppingToken).ConfigureAwait(false);
             }
         }
         finally
