@@ -28,11 +28,19 @@ import { QRCodeSVG } from 'qrcode.react'
 import { useAppSettings } from '@/hooks/useAppSettings'
 import i18n from '@/i18n'
 
+// 档位：250ms–5s，250ms 步进。主要档位显示文字，其余只显示刻度点。
 const POLL_MARKS = [
   { value: 250,  label: '250ms' },
   { value: 500,  label: '500ms' },
+  { value: 750 },
   { value: 1000, label: '1s'    },
+  { value: 1500, label: '1.5s'  },
   { value: 2000, label: '2s'    },
+  { value: 2500, label: '2.5s'  },
+  { value: 3000, label: '3s'    },
+  { value: 3500, label: '3.5s'  },
+  { value: 4000, label: '4s'    },
+  { value: 4500, label: '4.5s'  },
   { value: 5000, label: '5s'    },
 ]
 

@@ -113,7 +113,10 @@ public sealed class SensorBroadcastService(
         // populated above, so it stays cheap regardless of how many disks are present.
         var collectTask = Task.Run(async () =>
         {
-            using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(_pollIntervalMs));
+            // Re-read _pollIntervalMs on every iteration so a live change from the
+            // Settings page (PUT /api/config → PollIntervalMs setter) takes effect
+            // without restarting the service. A single PeriodicTimer created here
+            // would freeze the cycle at the startup value forever.
             while (!stoppingToken.IsCancellationRequested)
             {
                 try
@@ -126,7 +129,7 @@ public sealed class SensorBroadcastService(
                 {
                     _logger.LogWarning(ex, "Error collecting sensor data.");
                 }
-                await timer.WaitForNextTickAsync(stoppingToken).ConfigureAwait(false);
+                await Task.Delay(TimeSpan.FromMilliseconds(_pollIntervalMs), stoppingToken).ConfigureAwait(false);
             }
         }, stoppingToken);
 
