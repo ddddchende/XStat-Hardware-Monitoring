@@ -10,6 +10,8 @@ interface WorkspaceState {
   activePanelId: string
 }
 
+const ACTIVE_PANEL_KEY = 'xstat_active_panel'
+
 function parseWorkspace(json: string): WorkspaceState | null {
   try {
     const parsed = JSON.parse(json)
@@ -29,7 +31,7 @@ export function usePanelSensors() {
   // The editor pushes the whole workspace; the panel shows one panel at a time.
   const [workspaceJson, setWorkspaceJson] = useState<string | null>(null)
   const [currentPanelId, setCurrentPanelId] = useState<string | null>(
-    () => localStorage.getItem('xstat_active_panel'),
+    () => localStorage.getItem(ACTIVE_PANEL_KEY),
   )
   // Server-side history (up to 60s) pulled once after subscribing — used to seed charts.
   const [historySeed, setHistorySeed] = useState<HardwareSnapshot[] | null>(null)
@@ -58,14 +60,18 @@ export function usePanelSensors() {
   // Switch the displayed panel (e.g. from the triple-tap switcher).
   const switchPanel = useCallback((id: string) => {
     setCurrentPanelId(id)
-    localStorage.setItem('xstat_active_panel', id)
+    localStorage.setItem(ACTIVE_PANEL_KEY, id)
   }, [])
 
   // Fetch the workspace once on mount so the LAN panel shows the right view at load.
   useEffect(() => {
     fetch(`${window.location.origin}/api/panel-layout`)
       .then(r => (r.status === 204 ? null : r.text()))
-      .then(json => { if (json) setWorkspaceJson(json) })
+      .then(json => {
+        if (json) {
+          setWorkspaceJson(json)
+        }
+      })
       .catch(() => {})
   }, [])
 
@@ -120,8 +126,6 @@ export function usePanelSensors() {
     })
 
     hub.on('LayoutUpdated', (json: string) => {
-      // Editor pushed a new workspace; the shown-panel memo keeps the current
-      // selection (falling back to the editor's active panel if it vanished).
       setWorkspaceJson(json)
     })
 

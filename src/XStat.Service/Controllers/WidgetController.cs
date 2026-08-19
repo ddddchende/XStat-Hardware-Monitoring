@@ -20,10 +20,10 @@ public sealed class WidgetController : ControllerBase
     /// are unaffected. The widget's document.baseURI is then http://…, so the
     /// common font-injection snippet (`document.baseURI.match(/^https?:\/\//)`)
     /// resolves to the service origin correctly.
-    /// GET /api/widget?id={widgetId}&v={contentVersion}
+    /// GET /api/widget?panelId={panelId}&id={widgetId}&v={contentVersion}
     /// </summary>
     [HttpGet]
-    public IActionResult Get([FromQuery] string id)
+    public IActionResult Get([FromQuery] string id, [FromQuery] string? panelId = null)
     {
         var layout = _store.GetLayoutJson();
         if (layout is null) return NotFound();
@@ -131,12 +131,14 @@ public sealed class WidgetController : ControllerBase
             {
                 foreach (var p in panels.EnumerateArray())
                 {
+                    if (panelId is not null && (!p.TryGetProperty("id", out var panelIdProp) || panelIdProp.GetString() != panelId))
+                        continue;
                     if (!p.TryGetProperty("widgets", out var ws) || ws.ValueKind != JsonValueKind.Array) continue;
                     var served = TryServe(ws);
                     if (served != null) return served;
                 }
             }
-            if (root.TryGetProperty("widgets", out var wsRoot) && wsRoot.ValueKind == JsonValueKind.Array)
+            if (panelId is null && root.TryGetProperty("widgets", out var wsRoot) && wsRoot.ValueKind == JsonValueKind.Array)
             {
                 var served = TryServe(wsRoot);
                 if (served != null) return served;

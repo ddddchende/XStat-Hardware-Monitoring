@@ -165,11 +165,30 @@ function loadState(): PanelsState {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (raw) {
       const parsed = JSON.parse(raw) as PanelsState
-      if (Array.isArray(parsed.panels) && parsed.panels.length > 0) return parsed
+      if (Array.isArray(parsed.panels) && parsed.panels.length > 0) return normalizeWorkspace(parsed)
     }
   } catch { /* ignore */ }
   const def = makeDefaultPanel()
   return { panels: [def], activePanelId: def.id }
+}
+
+function normalizeWorkspace(state: PanelsState): PanelsState {
+  const usedWidgetIds = new Set<string>()
+  const panels = state.panels.map(panel => {
+    const idMap = new Map<string, string>()
+    const widgets = panel.widgets.map(widget => {
+      if (!usedWidgetIds.has(widget.id)) {
+        usedWidgetIds.add(widget.id)
+        return widget
+      }
+      const nextId = crypto.randomUUID()
+      idMap.set(widget.id, nextId)
+      usedWidgetIds.add(nextId)
+      return { ...widget, id: nextId }
+    })
+    return { ...panel, widgets, layout: panel.layout.map(item => ({ ...item, i: idMap.get(item.i) ?? item.i })) }
+  })
+  return { ...state, panels }
 }
 
 export function usePanelLayout() {
@@ -644,6 +663,21 @@ export function usePanelLayout() {
       const panel = JSON.parse(json) as PanelLayout
       if (!panel.name || !Array.isArray(panel.widgets)) return false
       panel.id = crypto.randomUUID()
+      const idMap = new Map<string, string>()
+      const groupMap = new Map<string, string>()
+      panel.widgets = panel.widgets.map(widget => {
+        const nextId = crypto.randomUUID()
+        idMap.set(widget.id, nextId)
+        const groupId = widget.groupId
+          ? (groupMap.get(widget.groupId) ?? (() => {
+              const nextGroupId = crypto.randomUUID()
+              groupMap.set(widget.groupId!, nextGroupId)
+              return nextGroupId
+            })())
+          : undefined
+        return { ...widget, id: nextId, groupId }
+      })
+      panel.layout = panel.layout.map(item => ({ ...item, i: idMap.get(item.i) ?? item.i }))
       // Migrate older exports that may lack canvas dimensions
       panel.canvasWidth  = panel.canvasWidth  ?? 800
       panel.canvasHeight = panel.canvasHeight ?? 600
@@ -664,7 +698,22 @@ export function usePanelLayout() {
   }
 
   function loadWorkspace(next: PanelsState) {
-    dispatch({ type: 'LOAD', state: next })
+    const used = new Set<string>()
+    const panels = next.panels.map(panel => {
+      const idMap = new Map<string, string>()
+      const widgets = panel.widgets.map(widget => {
+        if (!used.has(widget.id)) {
+          used.add(widget.id)
+          return widget
+        }
+        const nextId = crypto.randomUUID()
+        idMap.set(widget.id, nextId)
+        used.add(nextId)
+        return { ...widget, id: nextId }
+      })
+      return { ...panel, widgets, layout: panel.layout.map(item => ({ ...item, i: idMap.get(item.i) ?? item.i })) }
+    })
+    dispatch({ type: 'LOAD', state: { ...next, panels } })
   }
 
   return {

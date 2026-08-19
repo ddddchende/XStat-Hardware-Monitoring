@@ -677,7 +677,7 @@ export const PanelCanvas = React.forwardRef<PanelCanvasHandle, Props>(({
                 : {},
             }}
           >
-            <WidgetRenderer widget={widget} snapshot={snapshot} history={history} />
+            <WidgetRenderer widget={widget} snapshot={snapshot} history={history} panelId={panel.id} />
 
             {/* Transparent overlay in edit mode — left-click selects + drags */}
             {isEditMode && (

@@ -7,6 +7,7 @@ import { getServiceBase } from '@/utils/getServiceBase'
 interface Props {
   widget: PanelWidget
   snapshot: HardwareSnapshot | null
+  panelId: string
 }
 
 /**
@@ -330,7 +331,7 @@ export function extractPropSchema(html: string): CustomPropSchema[] {
  * Security: sandbox="allow-scripts" — no allow-same-origin, so the iframe
  * cannot access parent DOM, localStorage, cookies, or run elevated code.
  */
-export const CustomWidget: React.FC<Props> = ({ widget, snapshot }) => {
+export const CustomWidget: React.FC<Props> = ({ widget, snapshot, panelId }) => {
   const iframeRef = useRef<HTMLIFrameElement>(null)
   // 仅由绘制自检失败时自增（重建 iframe），避免其他路径的频繁重建
   const [renderToken, setRenderToken] = useState(0)
@@ -402,8 +403,8 @@ export const CustomWidget: React.FC<Props> = ({ widget, snapshot }) => {
     if (!isWeb) return ''
     const base = window.location.origin
     const v = hashString(widget.customHtml ?? '') + '|' + Object.keys(widget.customFiles ?? {}).length
-    return `${base}/api/widget?id=${encodeURIComponent(widget.id)}&v=${v}`
-  }, [isWeb, widget.id, widget.customHtml, widget.customFiles])
+    return `${base}/api/widget?panelId=${encodeURIComponent(panelId)}&id=${encodeURIComponent(widget.id)}&v=${v}`
+  }, [isWeb, panelId, widget.id, widget.customHtml, widget.customFiles])
 
   const widgetDoc = useMemo(() => {
     if (isWeb) return undefined

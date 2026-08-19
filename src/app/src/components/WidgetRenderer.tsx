@@ -19,9 +19,10 @@ interface Props {
   widget: PanelWidget
   snapshot: HardwareSnapshot | null
   history: Map<string, HistoryPoint[]>
+  panelId: string
 }
 
-export const WidgetRenderer: React.FC<Props> = ({ widget, snapshot, history }) => {
+export const WidgetRenderer: React.FC<Props> = ({ widget, snapshot, history, panelId }) => {
   switch (widget.type) {
     case 'SensorValue':
       return <SensorValueWidget widget={widget} snapshot={snapshot} />
@@ -36,7 +37,7 @@ export const WidgetRenderer: React.FC<Props> = ({ widget, snapshot, history }) =
     case 'Text':
       return <TextWidget widget={widget} />
     case 'Custom':
-      return <CustomWidget widget={widget} snapshot={snapshot} />
+      return <CustomWidget widget={widget} snapshot={snapshot} panelId={panelId} />
     case 'Image':
       return <ImageWidget widget={widget} />
     case 'Box':
