@@ -17,7 +17,7 @@ public sealed class ConfigController : ControllerBase
     /// <summary>GET /api/config — returns current runtime configuration.</summary>
     [HttpGet]
     public IActionResult Get() =>
-        Ok(new { pollIntervalMs = _broadcast.PollIntervalMs });
+        Ok(new { pollIntervalMs = _broadcast.PollIntervalMs, pauseWhenIdle = _broadcast.PauseWhenIdle });
 
     /// <summary>PUT /api/config — update runtime configuration (takes effect immediately).</summary>
     [HttpPut]
@@ -27,8 +27,9 @@ public sealed class ConfigController : ControllerBase
             return BadRequest(new { error = "pollIntervalMs must be between 100 and 30000." });
 
         _broadcast.PollIntervalMs = body.PollIntervalMs;
+        if (body.PauseWhenIdle is { } pause) _broadcast.PauseWhenIdle = pause;
         return NoContent();
     }
 }
 
-public record ConfigRequest(int PollIntervalMs);
+public record ConfigRequest(int PollIntervalMs, bool? PauseWhenIdle = null);

@@ -273,6 +273,8 @@
   "settings.restarted": "Restarted",
   "settings.pollInterval": "Poll interval",
   "settings.pollIntervalDesc": "How often sensor data is read from hardware",
+  "settings.pauseWhenIdle": "Pause when nobody is watching",
+  "settings.pauseWhenIdleDesc": "Stop reading hardware while no main window or browser panel is connected; resumes as soon as a client connects",
   "settings.lanWebPanel": "LAN Web Panel",
   "settings.lanDesc": "Open this URL on any phone, tablet, or PC on your network to view live sensor data.",
   "settings.copied": "Copied!",

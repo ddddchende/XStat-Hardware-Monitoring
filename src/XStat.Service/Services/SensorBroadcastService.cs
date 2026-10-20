@@ -65,6 +65,19 @@ public sealed class SensorBroadcastService(
         set => _pollIntervalMs = Math.Clamp(value, 100, 30_000);
     }
 
+    // When enabled, all hardware collection stops while no SignalR client is
+    // connected (Electron window not running, no browser panel open). A client
+    // connecting resumes collection within ~250ms.
+    private volatile bool _pauseWhenIdle = config.GetValue<bool>("PauseWhenIdle", true);
+    public bool PauseWhenIdle
+    {
+        get => _pauseWhenIdle;
+        set => _pauseWhenIdle = value;
+    }
+
+    /// <summary>True when polling should be skipped because nobody is watching.</summary>
+    private bool IsIdle => _pauseWhenIdle && _subscriptions.IsEmpty;
+
     // Per-connection sensor subscription. Value null = client never subscribed
     // (or called SubscribeAll) → receive the full snapshot. A non-null list is
     // the client-declared SensorFilter[]; the snapshot is reduced to matching
@@ -96,6 +109,13 @@ public sealed class SensorBroadcastService(
         {
             while (!stoppingToken.IsCancellationRequested)
             {
+                if (IsIdle)
+                {
+                    // Pause SMART reads while nobody is connected; poll the idle
+                    // flag every second so collection resumes quickly.
+                    await Task.Delay(1000, stoppingToken).ConfigureAwait(false);
+                    continue;
+                }
                 try
                 {
                     _monitor.UpdateSlowHardware();
@@ -117,8 +137,26 @@ public sealed class SensorBroadcastService(
             // Settings page (PUT /api/config → PollIntervalMs setter) takes effect
             // without restarting the service. A single PeriodicTimer created here
             // would freeze the cycle at the startup value forever.
+            var idle = false;
             while (!stoppingToken.IsCancellationRequested)
             {
+                // Nobody connected + pauseWhenIdle → skip the hardware reads
+                // entirely. Checked often so a newly connected client is served
+                // within ~250ms instead of waiting a full poll interval.
+                if (IsIdle)
+                {
+                    if (!idle)
+                    {
+                        idle = true;
+                        // Drop the history window and any pending broadcast permit:
+                        // a reconnecting client must not receive minutes-old samples.
+                        lock (_historyLock) _history.Clear();
+                        while (_snapshotReady.Wait(0)) { }
+                    }
+                    await Task.Delay(250, stoppingToken).ConfigureAwait(false);
+                    continue;
+                }
+                idle = false;
                 try
                 {
                     _lastSnapshot = _monitor.GetSnapshot();

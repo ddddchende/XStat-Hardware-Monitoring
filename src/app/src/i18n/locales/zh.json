@@ -273,6 +273,8 @@
   "settings.restarted": "已重启",
   "settings.pollInterval": "轮询间隔",
   "settings.pollIntervalDesc": "从硬件读取传感器数据的频率",
+  "settings.pauseWhenIdle": "无人查看时暂停采集",
+  "settings.pauseWhenIdleDesc": "没有主界面或浏览器连接时停止读取硬件以降低占用；客户端连上后立即恢复",
   "settings.lanWebPanel": "局域网 Web 面板",
   "settings.lanDesc": "在网络中的任意手机、平板或电脑上打开此 URL 查看实时传感器数据。",
   "settings.copied": "已复制！",

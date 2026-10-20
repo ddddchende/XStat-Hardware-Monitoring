@@ -5,9 +5,11 @@ const SETTINGS_KEY = 'xstat:settings:v1'
 
 export interface AppSettings {
   pollIntervalMs: number
+  /** Stop reading hardware while no client (Electron window / browser panel) is connected. */
+  pauseWhenIdle: boolean
 }
 
-const DEFAULT_SETTINGS: AppSettings = { pollIntervalMs: 1000 }
+const DEFAULT_SETTINGS: AppSettings = { pollIntervalMs: 1000, pauseWhenIdle: true }
 
 function loadSettings(): AppSettings {
   try {
@@ -27,7 +29,10 @@ export function useAppSettings() {
       .then(base => fetch(`${base}/api/config`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pollIntervalMs: settings.pollIntervalMs }),
+        body: JSON.stringify({
+          pollIntervalMs: settings.pollIntervalMs,
+          pauseWhenIdle: settings.pauseWhenIdle,
+        }),
       }))
       .catch(() => { /* service may not be running yet */ })
   }, [settings])
@@ -36,5 +41,9 @@ export function useAppSettings() {
     setSettings(s => ({ ...s, pollIntervalMs: ms }))
   }
 
-  return { settings, setPollIntervalMs }
+  function setPauseWhenIdle(v: boolean) {
+    setSettings(s => ({ ...s, pauseWhenIdle: v }))
+  }
+
+  return { settings, setPollIntervalMs, setPauseWhenIdle }
 }

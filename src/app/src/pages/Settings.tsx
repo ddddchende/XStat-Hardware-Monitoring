@@ -49,7 +49,7 @@ export const Settings: React.FC = () => {
   const { t } = useTranslation()
   const [panelUrl, setPanelUrl] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
-  const { settings, setPollIntervalMs } = useAppSettings()
+  const { settings, setPollIntervalMs, setPauseWhenIdle } = useAppSettings()
   const [portInput, setPortInput] = useState<string>('9421')
   const [portSaving, setPortSaving] = useState(false)
   const [portSaved, setPortSaved] = useState(false)
@@ -164,6 +164,18 @@ export const Settings: React.FC = () => {
               sx={{ color: 'primary.main' }}
             />
           </Box>
+        </ListItem>
+        <Divider />
+        <ListItem>
+          <ListItemText
+            primary={t('settings.pauseWhenIdle')}
+            secondary={t('settings.pauseWhenIdleDesc')}
+          />
+          <Switch
+            checked={settings.pauseWhenIdle}
+            onChange={e => setPauseWhenIdle(e.target.checked)}
+            color="primary"
+          />
         </ListItem>
       </List>
 
